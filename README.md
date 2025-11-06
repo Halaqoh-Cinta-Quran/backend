@@ -153,7 +153,56 @@ See **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** for complete API referenc
 
 ---
 
-## 🔐 Default Test Accounts
+## 🔐 Authentication & Registration
+
+### Dual Registration System
+
+This system has two separate registration flows for better security:
+
+#### 1️⃣ **Student Self-Registration** (Public)
+
+Students can register themselves without admin intervention:
+
+```bash
+POST /auth/register/pelajar
+```
+
+**Features:**
+- ✅ No authentication required
+- ✅ Automatic PELAJAR role assignment
+- ✅ Instant account creation
+- ✅ Ready to enroll in classes
+
+**Example:**
+```json
+{
+  "email": "student@example.com",
+  "password": "password123",
+  "nama": "Student Name"
+}
+```
+
+#### 2️⃣ **Staff Registration** (Admin Only)
+
+Admins create PENGAJAR and ADMIN accounts:
+
+```bash
+POST /auth/register
+Authorization: Bearer <admin-token>
+```
+
+**Features:**
+- 🔒 Admin authentication required
+- 🔒 Can only create PENGAJAR or ADMIN roles
+- 🚫 PELAJAR registration through this endpoint is forbidden
+- ✅ Full control over staff accounts
+
+**Why Two Endpoints?**
+- **Security:** Prevents unauthorized privilege escalation
+- **UX:** Students don't need to contact admin for registration
+- **Control:** Admin maintains full control over staff accounts
+
+### Default Test Accounts
 
 After running `pnpm prisma:seed`:
 
@@ -251,8 +300,11 @@ pnpm run format
 
 ### Authentication
 
-- `POST /auth/login` - User login
-- `POST /auth/register` - Register new user (Admin)
+- `POST /auth/login` - User login (Public)
+- `POST /auth/register/pelajar` - Student self-registration (Public)
+- `POST /auth/register` - Register staff (Admin only)
+- `GET /auth/me` - Get current user info
+- `PATCH /auth/change-password` - Change password (Authenticated users)
 
 ### User Management (Admin)
 
@@ -298,13 +350,21 @@ pnpm run format
 
 ## 🔒 Security Features
 
-- ✅ JWT-based authentication
-- ✅ Password hashing with **Argon2** (winner of Password Hashing Competition)
-- ✅ Role-based authorization (ADMIN, PENGAJAR, PELAJAR)
-- ✅ Input validation with class-validator
-- ✅ CORS enabled
-- ✅ File type validation
-- ✅ File size limits (50MB)
+- ✅ **Dual Registration System** - Public for students, admin-only for staff
+- ✅ **JWT-based Authentication** - Secure token-based auth
+- ✅ **Argon2 Password Hashing** - Winner of Password Hashing Competition 2015
+- ✅ **Role-based Authorization** - ADMIN, PENGAJAR, PELAJAR with granular permissions
+- ✅ **Input Validation** - class-validator for all DTOs
+- ✅ **CORS Enabled** - Configurable cross-origin requests
+- ✅ **File Type Validation** - Strict MIME type checking
+- ✅ **File Size Limits** - 50MB maximum upload size
+- ✅ **Privilege Escalation Prevention** - ForbiddenException for invalid role creation
+
+**Security Best Practices:**
+- Argon2 provides better resistance to GPU-based attacks than bcrypt
+- JWT secrets should be 64+ random characters in production
+- Environment variables never committed to git
+- See [SECURITY.md](./SECURITY.md) for production security checklist
 
 ---
 

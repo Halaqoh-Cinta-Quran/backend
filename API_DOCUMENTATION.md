@@ -79,6 +79,8 @@ curl http://localhost:3000/trpc/auth.login
 
 **Endpoint:** `POST /auth/login`
 
+**Public:** Yes
+
 **Request:**
 
 ```json
@@ -102,9 +104,50 @@ curl http://localhost:3000/trpc/auth.login
 }
 ```
 
-### Register (Admin Only)
+### Register Student (Public)
+
+**Endpoint:** `POST /auth/register/pelajar`
+
+**Public:** Yes ✅ (No authentication required)
+
+**Description:** Students can self-register without admin intervention.
+
+**Request:**
+
+```json
+{
+  "email": "student@example.com",
+  "password": "password123",
+  "nama": "Student Name"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Student registered successfully",
+  "user": {
+    "id": "uuid",
+    "email": "student@example.com",
+    "nama": "Student Name",
+    "role": "PELAJAR",
+    "createdAt": "2025-11-06T..."
+  }
+}
+```
+
+**Validation:**
+- Email must be valid format
+- Password minimum 6 characters
+- Nama (name) is required
+- Role is automatically set to `PELAJAR`
+
+### Register Staff (Admin Only)
 
 **Endpoint:** `POST /auth/register`
+
+**Public:** No 🔒 (Admin only)
 
 **Headers:**
 
@@ -113,14 +156,106 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 ```
 
+**Description:** Only admins can create ADMIN or PENGAJAR accounts.
+
 **Request:**
 
 ```json
 {
-  "email": "newuser@hcq.com",
+  "email": "teacher@hcq.com",
   "password": "password123",
-  "nama": "New User",
+  "nama": "Teacher Name",
+  "role": "PENGAJAR"
+}
+```
+
+**Allowed Roles:** `ADMIN`, `PENGAJAR`
+
+**Note:** Attempting to register PELAJAR through this endpoint will return 403 Forbidden. Use `/auth/register/pelajar` instead.
+
+**Response:**
+
+```json
+{
+  "message": "User registered successfully",
+  "user": {
+    "id": "uuid",
+    "email": "teacher@hcq.com",
+    "nama": "Teacher Name",
+    "role": "PENGAJAR",
+    "createdAt": "2025-11-06T..."
+  }
+}
+```
+
+### Get Current User
+
+**Endpoint:** `GET /auth/me`
+
+**Headers:**
+
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+**Response:**
+
+```json
+{
+  "id": "uuid",
+  "email": "user@hcq.com",
+  "nama": "User Name",
   "role": "PELAJAR"
+}
+```
+
+### Change Password
+
+**Endpoint:** `PATCH /auth/change-password`
+
+**Headers:**
+
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+**Description:** Allows authenticated users to change their password.
+
+**Request:**
+
+```json
+{
+  "oldPassword": "currentPassword123",
+  "newPassword": "newPassword456"
+}
+```
+
+**Validation:**
+- Old password must be correct
+- New password must be at least 6 characters
+- New password must be different from old password
+
+**Response:**
+
+```json
+{
+  "message": "Password berhasil diubah"
+}
+```
+
+**Error Responses:**
+
+```json
+// Wrong old password
+{
+  "statusCode": 400,
+  "message": "Password lama tidak sesuai"
+}
+
+// Same password
+{
+  "statusCode": 400,
+  "message": "Password baru tidak boleh sama dengan password lama"
 }
 ```
 

@@ -2,7 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  UnauthorizedException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { Role } from '@prisma/client';
 
@@ -13,6 +18,7 @@ describe('AuthService', () => {
     user: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
   };
 
@@ -43,12 +49,12 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('should successfully register a new user', async () => {
+    it('should successfully register ADMIN user', async () => {
       const registerDto = {
-        email: 'test@example.com',
+        email: 'admin@example.com',
         password: 'password123',
-        nama: 'Test User',
-        role: Role.PELAJAR,
+        nama: 'Admin User',
+        role: Role.ADMIN,
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(null);
@@ -65,9 +71,43 @@ describe('AuthService', () => {
       expect(result).toHaveProperty('message', 'User registered successfully');
       expect(result).toHaveProperty('user');
       expect(result.user.email).toBe(registerDto.email);
-      expect(mockPrismaService.user.findUnique).toHaveBeenCalledWith({
-        where: { email: registerDto.email },
+      expect(result.user.role).toBe(Role.ADMIN);
+    });
+
+    it('should successfully register PENGAJAR user', async () => {
+      const registerDto = {
+        email: 'pengajar@example.com',
+        password: 'password123',
+        nama: 'Pengajar User',
+        role: Role.PENGAJAR,
+      };
+
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.create.mockResolvedValue({
+        id: '1',
+        email: registerDto.email,
+        nama: registerDto.nama,
+        role: registerDto.role,
+        createdAt: new Date(),
       });
+
+      const result = await service.register(registerDto);
+
+      expect(result).toHaveProperty('message', 'User registered successfully');
+      expect(result.user.role).toBe(Role.PENGAJAR);
+    });
+
+    it('should throw ForbiddenException when trying to register PELAJAR', async () => {
+      const registerDto = {
+        email: 'pelajar@example.com',
+        password: 'password123',
+        nama: 'Pelajar User',
+        role: Role.PELAJAR,
+      };
+
+      await expect(service.register(registerDto)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('should throw ConflictException if email already exists', async () => {
@@ -75,7 +115,7 @@ describe('AuthService', () => {
         email: 'existing@example.com',
         password: 'password123',
         nama: 'Test User',
-        role: Role.PELAJAR,
+        role: Role.ADMIN,
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue({
@@ -84,6 +124,52 @@ describe('AuthService', () => {
       });
 
       await expect(service.register(registerDto)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+  });
+
+  describe('registerPelajar', () => {
+    it('should successfully register a pelajar', async () => {
+      const registerDto = {
+        email: 'pelajar@example.com',
+        password: 'password123',
+        nama: 'Pelajar User',
+      };
+
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+      mockPrismaService.user.create.mockResolvedValue({
+        id: '1',
+        email: registerDto.email,
+        nama: registerDto.nama,
+        role: Role.PELAJAR,
+        createdAt: new Date(),
+      });
+
+      const result = await service.registerPelajar(registerDto);
+
+      expect(result).toHaveProperty(
+        'message',
+        'Student registered successfully',
+      );
+      expect(result).toHaveProperty('user');
+      expect(result.user.email).toBe(registerDto.email);
+      expect(result.user.role).toBe(Role.PELAJAR);
+    });
+
+    it('should throw ConflictException if email already exists', async () => {
+      const registerDto = {
+        email: 'existing@example.com',
+        password: 'password123',
+        nama: 'Test User',
+      };
+
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: '1',
+        email: registerDto.email,
+      });
+
+      await expect(service.registerPelajar(registerDto)).rejects.toThrow(
         ConflictException,
       );
     });
@@ -182,6 +268,100 @@ describe('AuthService', () => {
       const result = await service.validateUser('nonexistent-id');
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('changePassword', () => {
+    it('should successfully change password', async () => {
+      const userId = 'user-123';
+      const oldPassword = 'oldPassword123';
+      const newPassword = 'newPassword456';
+      const hashedOldPassword = await argon2.hash(oldPassword);
+
+      const mockUser = {
+        id: userId,
+        email: 'user@example.com',
+        password: hashedOldPassword,
+        nama: 'User',
+        role: Role.PELAJAR,
+      };
+
+      mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
+      mockPrismaService.user.update.mockResolvedValue(mockUser);
+
+      const result = await service.changePassword(userId, {
+        oldPassword,
+        newPassword,
+      });
+
+      expect(result).toEqual({ message: 'Password berhasil diubah' });
+      expect(mockPrismaService.user.update).toHaveBeenCalled();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const updateCall = mockPrismaService.user.update.mock.calls[0][0];
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(updateCall.where.id).toBe(userId);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(updateCall.data.password).toBeDefined();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      expect(typeof updateCall.data.password).toBe('string');
+    });
+
+    it('should throw UnauthorizedException if user not found', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.changePassword('nonexistent-id', {
+          oldPassword: 'oldPassword',
+          newPassword: 'newPassword',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw BadRequestException if old password is incorrect', async () => {
+      const userId = 'user-123';
+      const hashedPassword = await argon2.hash('correctPassword');
+
+      const mockUser = {
+        id: userId,
+        email: 'user@example.com',
+        password: hashedPassword,
+        nama: 'User',
+        role: Role.PELAJAR,
+      };
+
+      mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
+
+      await expect(
+        service.changePassword(userId, {
+          oldPassword: 'wrongPassword',
+          newPassword: 'newPassword',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException if new password same as old password', async () => {
+      const userId = 'user-123';
+      const password = 'samePassword123';
+      const hashedPassword = await argon2.hash(password);
+
+      const mockUser = {
+        id: userId,
+        email: 'user@example.com',
+        password: hashedPassword,
+        nama: 'User',
+        role: Role.PELAJAR,
+      };
+
+      mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
+
+      await expect(
+        service.changePassword(userId, {
+          oldPassword: password,
+          newPassword: password,
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
     });
   });
 });
