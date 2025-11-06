@@ -1,5 +1,3 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateAnnouncementDto } from './create-announcement.dto';
 import {
   IsOptional,
   IsEnum,
@@ -22,7 +20,7 @@ export class UpdateAnnouncementDto {
   @IsOptional()
   scope?: AnnouncementScope;
 
-  @ValidateIf((o) => o.scope === 'KELAS')
+  @ValidateIf((o: UpdateAnnouncementDto) => o.scope === 'KELAS')
   @IsUUID()
   @IsOptional()
   kelasId?: string;

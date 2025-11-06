@@ -7,7 +7,7 @@ import {
   Param,
   Delete,
   UseGuards,
-  Request,
+  Req,
   UseInterceptors,
   UploadedFile,
   Res,
@@ -23,7 +23,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import type { Response } from 'express';
+import type { Response, Request } from 'express';
 import * as fs from 'fs';
 
 @Controller('materi')
@@ -36,9 +36,9 @@ export class MateriController {
   @Roles('PENGAJAR')
   createSection(
     @Body() createDto: CreateMateriSectionDto,
-    @Request() req: any,
+    @Req() req: Request,
   ) {
-    return this.materiService.createSection(createDto, req.user.sub);
+    return this.materiService.createSection(createDto, req.user!.sub);
   }
 
   @Get('section/kelas/:kelasId')
@@ -56,15 +56,15 @@ export class MateriController {
   updateSection(
     @Param('id') id: string,
     @Body() updateDto: UpdateMateriSectionDto,
-    @Request() req: any,
+    @Req() req: Request,
   ) {
-    return this.materiService.updateSection(id, updateDto, req.user.sub);
+    return this.materiService.updateSection(id, updateDto, req.user!.sub);
   }
 
   @Delete('section/:id')
   @Roles('PENGAJAR')
-  removeSection(@Param('id') id: string, @Request() req: any) {
-    return this.materiService.removeSection(id, req.user.sub);
+  removeSection(@Param('id') id: string, @Req() req: Request) {
+    return this.materiService.removeSection(id, req.user!.sub);
   }
 
   // MateriFile endpoints
@@ -116,9 +116,9 @@ export class MateriController {
   uploadFile(
     @Body() createDto: CreateMateriFileDto,
     @UploadedFile() file: Express.Multer.File,
-    @Request() req: any,
+    @Req() req: Request,
   ) {
-    return this.materiService.uploadFile(createDto, file, req.user.sub);
+    return this.materiService.uploadFile(createDto, file, req.user!.sub);
   }
 
   @Get('file/section/:materiSectionId')
@@ -146,7 +146,7 @@ export class MateriController {
 
   @Delete('file/:id')
   @Roles('PENGAJAR')
-  deleteFile(@Param('id') id: string, @Request() req: any) {
-    return this.materiService.deleteFile(id, req.user.sub);
+  deleteFile(@Param('id') id: string, @Req() req: Request) {
+    return this.materiService.deleteFile(id, req.user!.sub);
   }
 }

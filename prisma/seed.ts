@@ -87,7 +87,11 @@ async function main() {
     },
   });
 
-  console.log('✅ Mata Pelajaran created:', mataPelajaran1.nama, mataPelajaran2.nama);
+  console.log(
+    '✅ Mata Pelajaran created:',
+    mataPelajaran1.nama,
+    mataPelajaran2.nama,
+  );
 
   console.log('🎉 Seeding completed!');
   console.log('\n📝 Default credentials:');

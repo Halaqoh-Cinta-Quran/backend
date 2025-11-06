@@ -13,6 +13,32 @@ import {
   UpdateNilaiDto,
 } from './dto';
 
+export interface GroupedNilai {
+  kelas: {
+    id: string;
+    namaKelas: string;
+    semester: {
+      id: string;
+      nama: string;
+    };
+    mataPelajaran: {
+      id: string;
+      nama: string;
+    };
+  };
+  nilaiList: Array<{
+    id: string;
+    nilai: number;
+    komponen: {
+      id: string;
+      nama: string;
+      bobot: number;
+    };
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
+}
+
 @Injectable()
 export class NilaiService {
   constructor(private readonly prisma: PrismaService) {}
@@ -353,7 +379,7 @@ export class NilaiService {
     return komponenList;
   }
 
-  async getMyNilai(userId: string) {
+  async getMyNilai(userId: string): Promise<GroupedNilai[]> {
     // Get all nilai for this user
     const nilaiList = await this.prisma.nilai.findMany({
       where: { userId },
@@ -390,14 +416,14 @@ export class NilaiService {
           komponen: {
             id: nilai.komponen.id,
             nama: nilai.komponen.nama,
-            bobot: nilai.komponen.bobot,
+            bobot: nilai.komponen.bobot ?? 0,
           },
           createdAt: nilai.createdAt,
           updatedAt: nilai.updatedAt,
         });
         return acc;
       },
-      {} as Record<string, any>,
+      {} as Record<string, GroupedNilai>,
     );
 
     return Object.values(groupedByKelas);

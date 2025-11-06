@@ -46,7 +46,20 @@ export class SemesterService {
   async update(id: string, updateSemesterDto: UpdateSemesterDto) {
     await this.findOne(id);
 
-    const dataToUpdate: any = { ...updateSemesterDto };
+    const dataToUpdate: {
+      nama?: string;
+      tanggalMulai?: Date;
+      tanggalAkhir?: Date;
+      status?: UpdateSemesterDto['status'];
+    } = {};
+
+    if (updateSemesterDto.nama) {
+      dataToUpdate.nama = updateSemesterDto.nama;
+    }
+
+    if (updateSemesterDto.status) {
+      dataToUpdate.status = updateSemesterDto.status;
+    }
 
     if (updateSemesterDto.tanggalMulai) {
       dataToUpdate.tanggalMulai = new Date(updateSemesterDto.tanggalMulai);

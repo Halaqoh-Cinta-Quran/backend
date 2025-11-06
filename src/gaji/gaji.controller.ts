@@ -7,7 +7,7 @@ import {
   Param,
   Delete,
   UseGuards,
-  Request,
+  Req,
 } from '@nestjs/common';
 import { GajiService } from './gaji.service';
 import { CreateGajiDto, UpdateGajiDto } from './dto';
@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import type { Request } from 'express';
 
 @Controller('gaji')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -41,8 +42,8 @@ export class GajiController {
 
   @Get('saya')
   @Roles(Role.PENGAJAR)
-  findMyGaji(@Request() req: any) {
-    return this.gajiService.findMyGaji(req.user.sub);
+  findMyGaji(@Req() req: Request) {
+    return this.gajiService.findMyGaji(req.user!.sub);
   }
 
   @Get(':id')

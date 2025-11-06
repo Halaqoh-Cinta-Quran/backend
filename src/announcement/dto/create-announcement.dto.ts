@@ -1,7 +1,6 @@
 import {
   IsEnum,
   IsNotEmpty,
-  IsOptional,
   IsString,
   IsUUID,
   ValidateIf,
@@ -21,7 +20,7 @@ export class CreateAnnouncementDto {
   @IsNotEmpty()
   scope: AnnouncementScope;
 
-  @ValidateIf((o) => o.scope === 'KELAS')
+  @ValidateIf((o: CreateAnnouncementDto) => o.scope === 'KELAS')
   @IsUUID()
   @IsNotEmpty()
   kelasId?: string;

@@ -59,7 +59,7 @@ export class TrpcService {
           },
         },
       });
-    } catch (error) {
+    } catch {
       throw new TRPCError({
         code: 'UNAUTHORIZED',
         message: 'Token tidak valid',
@@ -68,8 +68,8 @@ export class TrpcService {
   });
 
   // Middleware untuk role checking
-  hasRole = (roles: string[]): any =>
-    this.trpc.middleware(async ({ ctx, next }) => {
+  hasRole(roles: string[]) {
+    return this.trpc.middleware(async ({ ctx, next }) => {
       if (!ctx.user) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -86,6 +86,7 @@ export class TrpcService {
 
       return next({ ctx });
     });
+  }
 
   // Protected procedures
   protectedProcedure = this.procedure.use(this.isAuthed);

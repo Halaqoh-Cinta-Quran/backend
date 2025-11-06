@@ -38,4 +38,5 @@ async function bootstrap() {
   console.log(`🚀 Application is running on: http://localhost:${port}`);
   console.log(`📡 tRPC endpoint available at: http://localhost:${port}/trpc`);
 }
-bootstrap();
+
+void bootstrap();

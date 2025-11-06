@@ -364,15 +364,9 @@ This is a private project for Halaqoh Cinta Qur'an. For internal development:
 
 ---
 
-## 📄 License
-
-Private - Halaqoh Cinta Qur'an © 2025
-
----
-
 ## 👨‍💻 Development Team
 
-**Backend Developer:** AI-assisted development  
+**Backend Developer:** Faralha + Github Copilot (Claude Sonnet 4.5)
 **Project:** HCQ LMS  
 **Started:** November 2025  
 **Status:** Production Ready ✅
