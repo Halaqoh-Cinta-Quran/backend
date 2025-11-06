@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PENGAJAR
+  PELAJAR
+}
+
+enum SemesterStatus {
+  AKTIF
+  MENDATANG
+  SELESAI
+}
+
+enum StatusPembayaran {
+  LUNAS
+  BELUM_LUNAS
+}
+
+enum StatusPresensi {
+  HADIR
+  IZIN
+  SAKIT
+  ALFA
+}
+
+enum AnnouncementScope {
+  GLOBAL
+  KELAS
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  nama      String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  enrollments      Enrollment[]
+  presensiRecords  PresensiRecord[]
+  nilai            Nilai[]
+  tagihanSPP       TagihanSPP[]
+  gaji             Gaji[]
+  announcements    Announcement[]
+  materiSections   MateriSection[]
+  komponenNilai    KomponenNilai[]
+
+  @@map("users")
+}
+
+model Semester {
+  id            String         @id @default(uuid())
+  nama          String
+  tanggalMulai  DateTime
+  tanggalAkhir  DateTime
+  status        SemesterStatus @default(MENDATANG)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relations
+  kelas Kelas[]
+
+  @@map("semesters")
+}
+
+model MataPelajaran {
+  id          String   @id @default(uuid())
+  nama        String
+  kode        String?  @unique
+  deskripsi   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  kelas Kelas[]
+
+  @@map("mata_pelajaran")
+}
+
+model Kelas {
+  id              String   @id @default(uuid())
+  namaKelas       String
+  jadwalHari      String?
+  jadwalJam       String?
+  semesterId      String
+  mataPelajaranId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  semester         Semester           @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  mataPelajaran    MataPelajaran      @relation(fields: [mataPelajaranId], references: [id], onDelete: Cascade)
+  enrollments      Enrollment[]
+  presensiSessions PresensiSession[]
+  komponenNilai    KomponenNilai[]
+  materiSections   MateriSection[]
+  announcements    Announcement[]
+
+  @@map("kelas")
+}
+
+model Enrollment {
+  id        String   @id @default(uuid())
+  userId    String
+  kelasId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kelas Kelas @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kelasId])
+  @@map("enrollments")
+}
+
+model PresensiSession {
+  id         String    @id @default(uuid())
+  kelasId    String
+  kode       String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  // Relations
+  kelas           Kelas            @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+  presensiRecords PresensiRecord[]
+
+  @@map("presensi_sessions")
+}
+
+model PresensiRecord {
+  id                String         @id @default(uuid())
+  presensiSessionId String
+  userId            String
+  status            StatusPresensi @default(HADIR)
+  isManual          Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // Relations
+  presensiSession PresensiSession @relation(fields: [presensiSessionId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([presensiSessionId, userId])
+  @@map("presensi_records")
+}
+
+model KomponenNilai {
+  id        String   @id @default(uuid())
+  kelasId   String
+  nama      String
+  bobot     Float?   @default(0)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  kelas   Kelas  @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+  creator User   @relation(fields: [createdBy], references: [id])
+  nilai   Nilai[]
+
+  @@map("komponen_nilai")
+}
+
+model Nilai {
+  id            String   @id @default(uuid())
+  komponenId    String
+  userId        String
+  nilai         Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  komponen KomponenNilai @relation(fields: [komponenId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([komponenId, userId])
+  @@map("nilai")
+}
+
+model MateriSection {
+  id        String   @id @default(uuid())
+  kelasId   String
+  judul     String
+  deskripsi String?
+  urutan    Int      @default(0)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  kelas   Kelas         @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+  creator User          @relation(fields: [createdBy], references: [id])
+  files   MateriFile[]
+
+  @@map("materi_sections")
+}
+
+model MateriFile {
+  id        String   @id @default(uuid())
+  sectionId String
+  judul     String
+  deskripsi String?
+  filename  String
+  filepath  String
+  mimetype  String?
+  size      Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  section MateriSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@map("materi_files")
+}
+
+model TagihanSPP {
+  id        String           @id @default(uuid())
+  userId    String
+  nominal   Float
+  bulan     String
+  tahun     Int
+  status    StatusPembayaran @default(BELUM_LUNAS)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bulan, tahun])
+  @@map("tagihan_spp")
+}
+
+model Gaji {
+  id        String           @id @default(uuid())
+  userId    String
+  nominal   Float
+  bulan     String
+  tahun     Int
+  status    StatusPembayaran @default(BELUM_LUNAS)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bulan, tahun])
+  @@map("gaji")
+}
+
+model Announcement {
+  id        String            @id @default(uuid())
+  judul     String
+  isi       String
+  scope     AnnouncementScope @default(GLOBAL)
+  kelasId   String?
+  createdBy String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  // Relations
+  kelas   Kelas? @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+  creator User   @relation(fields: [createdBy], references: [id])
+
+  @@map("announcements")
+}
