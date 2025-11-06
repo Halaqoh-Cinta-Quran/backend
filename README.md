@@ -104,6 +104,41 @@ The API will be available at:
 
 ---
 
+## 🧪 Testing
+
+This project includes comprehensive test coverage:
+
+- **Unit Tests**: Testing individual services and components
+- **Integration Tests**: Testing module interactions
+- **E2E Tests**: Testing complete API workflows
+
+### Running Tests
+
+```bash
+# Run all unit tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Generate coverage report
+pnpm test:cov
+
+# Run E2E tests
+pnpm test:e2e
+```
+
+### Current Test Coverage
+
+- ✅ **Auth Module** - Registration, Login, JWT validation
+- ✅ **User Module** - CRUD operations, validation
+- ✅ **Semester Module** - Full CRUD with status management
+- 📝 More modules in progress...
+
+See **[TESTING.md](./TESTING.md)** for complete testing guide.
+
+---
+
 ## 📚 API Documentation
 
 See **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** for complete API reference including:
@@ -333,10 +368,11 @@ pnpm run build          # Build for production
 pnpm run start:prod     # Run production build
 
 # Testing
-pnpm run test           # Unit tests
-pnpm run test:watch     # Unit tests (watch)
-pnpm run test:cov       # Test coverage
-pnpm run test:e2e       # E2E tests
+pnpm run test           # Run all unit tests
+pnpm run test:watch     # Unit tests in watch mode
+pnpm run test:cov       # Test coverage report
+pnpm run test:e2e       # E2E integration tests
+pnpm run test:debug     # Debug tests
 
 # Code Quality
 pnpm run lint           # Lint code
