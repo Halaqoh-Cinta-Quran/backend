@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { TrpcService } from '../trpc.service';
 import { z } from 'zod';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import * as jwt from 'jsonwebtoken';
 
 @Injectable()
@@ -30,8 +30,8 @@ export class TrpcAuthRouter {
             throw new Error('Invalid credentials');
           }
 
-          // Validate password (in production use bcrypt)
-          const isValid = await bcrypt.compare(password, user.password);
+          // Validate password with Argon2
+          const isValid = await argon2.verify(user.password, password);
 
           if (!isValid) {
             throw new Error('Invalid credentials');
@@ -70,7 +70,7 @@ export class TrpcAuthRouter {
           }),
         )
         .mutation(async ({ input, ctx }) => {
-          const hashedPassword = await bcrypt.hash(input.password, 10);
+          const hashedPassword = await argon2.hash(input.password);
 
           const user = await ctx.prisma.user.create({
             data: {

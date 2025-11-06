@@ -15,7 +15,7 @@
 ### 2. Authentication & Authorization
 
 - ✅ JWT-based authentication dengan Passport
-- ✅ Password hashing dengan bcrypt
+- ✅ Password hashing dengan **Argon2** (winner of Password Hashing Competition)
 - ✅ Role-based access control (ADMIN, PENGAJAR, PELAJAR)
 - ✅ JwtAuthGuard untuk protected routes
 - ✅ RolesGuard untuk role-specific access

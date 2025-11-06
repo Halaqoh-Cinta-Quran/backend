@@ -264,7 +264,7 @@ pnpm run format
 ## 🔒 Security Features
 
 - ✅ JWT-based authentication
-- ✅ Password hashing with bcrypt
+- ✅ Password hashing with **Argon2** (winner of Password Hashing Competition)
 - ✅ Role-based authorization (ADMIN, PENGAJAR, PELAJAR)
 - ✅ Input validation with class-validator
 - ✅ CORS enabled

@@ -1,13 +1,15 @@
 import { PrismaClient, Role, SemesterStatus } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding database...');
+  console.log('⚠️  WARNING: These are DEFAULT DEVELOPMENT credentials.');
+  console.log('⚠️  CHANGE ALL PASSWORDS immediately in production!');
 
   // Create Admin User
-  const adminPassword = await bcrypt.hash('admin123', 10);
+  const adminPassword = await argon2.hash('admin123');
   const admin = await prisma.user.upsert({
     where: { email: 'admin@hcq.com' },
     update: {},
@@ -22,7 +24,7 @@ async function main() {
   console.log('✅ Admin created:', admin.email);
 
   // Create Sample Pengajar
-  const pengajarPassword = await bcrypt.hash('pengajar123', 10);
+  const pengajarPassword = await argon2.hash('pengajar123');
   const pengajar = await prisma.user.upsert({
     where: { email: 'pengajar@hcq.com' },
     update: {},
@@ -37,7 +39,7 @@ async function main() {
   console.log('✅ Pengajar created:', pengajar.email);
 
   // Create Sample Pelajar
-  const pelajarPassword = await bcrypt.hash('pelajar123', 10);
+  const pelajarPassword = await argon2.hash('pelajar123');
   const pelajar = await prisma.user.upsert({
     where: { email: 'pelajar@hcq.com' },
     update: {},
