@@ -16,10 +16,10 @@ This API implements a secure JWT refresh token system with the following feature
 
 ### Token Types
 
-| Token Type      | Lifetime   | Storage  | Purpose                     |
-| --------------- | ---------- | -------- | --------------------------- |
-| Access Token    | 15 minutes | Memory   | API authentication          |
-| Refresh Token   | 7 days     | Database | Obtain new access tokens    |
+| Token Type    | Lifetime   | Storage  | Purpose                  |
+| ------------- | ---------- | -------- | ------------------------ |
+| Access Token  | 15 minutes | Memory   | API authentication       |
+| Refresh Token | 7 days     | Database | Obtain new access tokens |
 
 ### Security Features
 
@@ -66,6 +66,7 @@ model RefreshToken {
 **Endpoint:** `POST /api/v1/auth/login`
 
 **Request:**
+
 ```json
 {
   "email": "user@example.com",
@@ -74,6 +75,7 @@ model RefreshToken {
 ```
 
 **Response:**
+
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -92,6 +94,7 @@ model RefreshToken {
 **Endpoint:** `POST /api/v1/auth/refresh`
 
 **Request:**
+
 ```json
 {
   "refreshToken": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6..."
@@ -99,6 +102,7 @@ model RefreshToken {
 ```
 
 **Response:**
+
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -127,6 +131,7 @@ model RefreshToken {
 **Endpoint:** `POST /api/v1/auth/logout`
 
 **Request:**
+
 ```json
 {
   "refreshToken": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6..."
@@ -134,6 +139,7 @@ model RefreshToken {
 ```
 
 **Response:**
+
 ```json
 {
   "message": "Logged out successfully"
@@ -228,7 +234,7 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Response interceptor - Auto-refresh on 401
@@ -244,7 +250,7 @@ api.interceptors.response.use(
       try {
         // Refresh tokens
         await refreshTokens();
-        
+
         // Retry original request with new token
         const token = getAccessToken();
         originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -258,7 +264,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
@@ -302,13 +308,14 @@ export default function Dashboard() {
 ### Production Recommendations
 
 1. **Use httpOnly Cookies for Refresh Tokens**
+
    ```typescript
    // Backend: Set refresh token as httpOnly cookie
    res.cookie('refreshToken', token, {
      httpOnly: true,
      secure: true, // HTTPS only
      sameSite: 'strict',
-     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
    });
    ```
 
@@ -326,6 +333,7 @@ export default function Dashboard() {
    - ✅ Database storage for revocation capability
 
 5. **Token Cleanup**
+
    ```typescript
    // Cron job to delete expired tokens
    @Cron('0 0 * * *') // Daily at midnight
@@ -451,6 +459,7 @@ A: Enables instant revocation (logout), user session management, and security mo
 
 **Q: What happens if refresh token is stolen?**  
 A: Attacker can get new access tokens until:
+
 - Token expires (7 days)
 - User logs out
 - Admin revokes token
@@ -460,9 +469,10 @@ A: Yes! Each login creates a new refresh token. All stored in database.
 
 **Q: How to implement "Logout from all devices"?**  
 A: Delete all refresh tokens for that user:
+
 ```typescript
 await prisma.refreshToken.deleteMany({
-  where: { userId: user.id }
+  where: { userId: user.id },
 });
 ```
 

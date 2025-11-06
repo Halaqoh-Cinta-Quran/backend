@@ -498,6 +498,7 @@ pnpm prisma:reset       # Reset database (⚠️ deletes data)
 See **[GIT_HOOKS.md](./GIT_HOOKS.md)** for Git hooks and quality checks.
 
 This project uses:
+
 - ✅ **Husky** - Git hooks for pre-commit checks
 - ✅ **Lint-staged** - Run linters on staged files only
 - ✅ **ESLint** - Code linting and auto-fixing
@@ -514,6 +515,7 @@ For internal development:
 6. Create Pull Request
 
 **Note:** Commits will be blocked if:
+
 - ❌ ESLint errors found
 - ❌ Tests fail
 - ❌ Commit message < 10 characters
