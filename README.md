@@ -2,7 +2,7 @@
 
 > Learning Management System API untuk Halaqoh Cinta Qur'an
 
-**Built with:** NestJS + Prisma + PostgreSQL + tRPC  
+**Built with:** NestJS + Prisma + PostgreSQL
 **Version:** 1.0.0  
 **Status:** ✅ Production Ready
 
@@ -26,11 +26,13 @@
 
 ### 🚀 Advanced Features
 
-- **tRPC Integration** - Type-safe API alongside REST endpoints
+- **Magic Link Invitation** - Secure teacher onboarding with token expiry
 - **File Upload System** - PDF, DOC, PPT, images, videos support
 - **Smart Presensi** - Auto-expiring attendance codes
 - **Flexible Grading** - Weighted grade components (UTS, UAS, etc.)
 - **Role-Based Access** - Granular permissions per module
+- **Optional User Profiles** - fullName, cities, address, phoneNumber fields
+- **Git Hooks** - Pre-commit linting and testing with Husky
 
 ---
 
@@ -97,10 +99,12 @@ pnpm run build
 pnpm run start:prod
 ```
 
-The API will be available at:
+### Base URL
 
-- REST API: `http://localhost:3000`
-- tRPC API: `http://localhost:3000/trpc`
+```
+Development: http://localhost:4000/api/v1
+Production: https://api.hcq.com/api/v1 (coming soon)
+```
 
 ---
 
@@ -143,28 +147,28 @@ See **[TESTING.md](./TESTING.md)** for complete testing guide.
 
 See **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** for complete API reference including:
 
-- All REST endpoints (70+ routes)
-- tRPC usage & examples
-- Authentication guide
+- All REST endpoints (80+ routes)
+- Authentication & magic link registration guide
 - Request/response examples
 - Error handling
-- Testing guide
-- Frontend integration
+- Complete workflow examples
+- Testing checklist
+- Authorization matrix
 
 ---
 
 ## 🔐 Authentication & Registration
 
-### Dual Registration System
+### Unified Registration System with Magic Link
 
-This system has two separate registration flows for better security:
+This system uses a modern, secure registration flow:
 
 #### 1️⃣ **Student Self-Registration** (Public)
 
 Students can register themselves without admin intervention:
 
 ```bash
-POST /auth/register/pelajar
+POST /auth/register
 ```
 
 **Features:**
@@ -172,7 +176,7 @@ POST /auth/register/pelajar
 - ✅ No authentication required
 - ✅ Automatic PELAJAR role assignment
 - ✅ Instant account creation
-- ✅ Ready to enroll in classes
+- ✅ Optional profile fields (fullName, cities, address, phoneNumber)
 
 **Example:**
 
@@ -180,31 +184,65 @@ POST /auth/register/pelajar
 {
   "email": "student@example.com",
   "password": "password123",
-  "nama": "Student Name"
+  "nama": "Student Name",
+  "fullName": "Student Full Name",
+  "cities": "Jakarta",
+  "address": "Jl. Example No. 123",
+  "phoneNumber": "081234567890"
 }
 ```
 
-#### 2️⃣ **Staff Registration** (Admin Only)
+#### 2️⃣ **Teacher Registration via Magic Link** (Token-Based)
 
-Admins create PENGAJAR and ADMIN accounts:
+Admin creates invitation, teacher registers using magic link:
+
+**Step 1 - Admin Creates Invitation:**
 
 ```bash
-POST /auth/register
+POST /auth/invite-pengajar
 Authorization: Bearer <admin-token>
+
+{
+  "email": "teacher@hcq.com"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Invitation created successfully",
+  "email": "teacher@hcq.com",
+  "magicLink": "http://localhost:3000/register?token=abc123...",
+  "expiresAt": "2025-11-13T12:00:00.000Z"
+}
+```
+
+**Step 2 - Teacher Registers:**
+
+```bash
+POST /auth/register?token=abc123...
+
+{
+  "email": "teacher@hcq.com",
+  "password": "password123",
+  "nama": "Teacher Name"
+}
 ```
 
 **Features:**
 
-- 🔒 Admin authentication required
-- 🔒 Can only create PENGAJAR or ADMIN roles
-- 🚫 PELAJAR registration through this endpoint is forbidden
-- ✅ Full control over staff accounts
+- 🔒 Token-based security (7-day expiry)
+- 🔒 Email verification required
+- 🔒 One-time use tokens
+- ✅ Automatic PENGAJAR role assignment
 
-**Why Two Endpoints?**
+**Why Magic Link System?**
 
-- **Security:** Prevents unauthorized privilege escalation
-- **UX:** Students don't need to contact admin for registration
-- **Control:** Admin maintains full control over staff accounts
+- **Security:** Prevents unauthorized teacher account creation
+- **Email Verification:** Ensures valid email addresses
+- **UX:** No complex verification process
+- **Control:** Admin maintains full control over teacher invitations
 
 ### Default Test Accounts
 
@@ -231,7 +269,7 @@ pnpm run test:e2e
 pnpm run test:cov
 
 # Manual API testing
-curl -X POST http://localhost:3000/auth/login \
+curl -X POST http://localhost:4000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@hcq.com","password":"admin123"}'
 ```
@@ -242,7 +280,7 @@ curl -X POST http://localhost:3000/auth/login \
 
 ```
 src/
-├── auth/              # Authentication & JWT
+├── auth/              # Authentication & JWT + Magic Link
 ├── user/              # User management
 ├── semester/          # Semester management
 ├── mata-pelajaran/    # Subject management
@@ -253,13 +291,6 @@ src/
 ├── announcement/      # Announcements
 ├── spp/               # Student payments
 ├── gaji/              # Teacher salaries
-├── trpc/              # tRPC routers
-│   ├── routers/
-│   │   ├── auth.router.ts
-│   │   ├── kelas.router.ts
-│   │   └── nilai.router.ts
-│   ├── trpc.service.ts
-│   └── trpc.router.ts
 ├── prisma/            # Prisma client
 ├── app.module.ts      # Root module
 └── main.ts            # Application entry
@@ -304,9 +335,11 @@ pnpm run format
 
 ### Authentication
 
-- `POST /auth/login` - User login (Public)
-- `POST /auth/register/pelajar` - Student self-registration (Public)
-- `POST /auth/register` - Register staff (Admin only)
+- `POST /auth/login` - User login (Public) - Returns access & refresh tokens
+- `POST /auth/register` - Student self-registration (Public) or Teacher with token
+- `POST /auth/invite-pengajar` - Create teacher invitation (Admin only)
+- `POST /auth/refresh` - Get new access token using refresh token
+- `POST /auth/logout` - Invalidate refresh token
 - `GET /auth/me` - Get current user info
 - `PATCH /auth/change-password` - Change password (Authenticated users)
 
@@ -342,42 +375,47 @@ pnpm run format
 - `POST /materi/file` - Upload file (Pengajar)
 - `GET /materi/file/download/:id` - Download file
 
-### tRPC
-
-- `trpc.auth.login` - Type-safe login
-- `trpc.kelas.getAll` - Get all classes
-- `trpc.nilai.getMyNilai` - Get my grades
-
 **See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for complete endpoint list.**
 
 ---
 
 ## 🔒 Security Features
 
-- ✅ **Dual Registration System** - Public for students, admin-only for staff
+- ✅ **Magic Link Invitation System** - Secure token-based teacher registration
+- ✅ **JWT Refresh Token** - Short-lived access tokens (15 min) + long-lived refresh tokens (7 days)
+- ✅ **Token Rotation** - New refresh token issued on each refresh for enhanced security
 - ✅ **JWT-based Authentication** - Secure token-based auth
 - ✅ **Argon2 Password Hashing** - Winner of Password Hashing Competition 2015
 - ✅ **Role-based Authorization** - ADMIN, PENGAJAR, PELAJAR with granular permissions
 - ✅ **Input Validation** - class-validator for all DTOs
-- ✅ **CORS Enabled** - Configurable cross-origin requests
+- ✅ **CORS Enabled** - Configured for localhost:3000 (frontend)
 - ✅ **File Type Validation** - Strict MIME type checking
 - ✅ **File Size Limits** - 50MB maximum upload size
-- ✅ **Privilege Escalation Prevention** - ForbiddenException for invalid role creation
+- ✅ **Token Expiration** - Magic links expire after 7 days
+- ✅ **One-Time Use Tokens** - Registration tokens can only be used once
+- ✅ **Email Verification** - Email must match invitation
+- ✅ **Stateful Refresh Tokens** - Stored in database for instant revocation
 
 **Security Best Practices:**
 
 - Argon2 provides better resistance to GPU-based attacks than bcrypt
 - JWT secrets should be 64+ random characters in production
 - Environment variables never committed to git
+- Magic link tokens are cryptographically secure (32 bytes random)
+- Refresh tokens enable secure logout and session management
+- Access tokens are short-lived to minimize security risks
 - See [SECURITY.md](./SECURITY.md) for production security checklist
+- See [REFRESH_TOKEN.md](./REFRESH_TOKEN.md) for token implementation details
 
 ---
 
 ## 📊 Database Schema
 
-15 models including:
+17 models including:
 
-- User (with roles)
+- User (with roles & optional profile fields)
+- RefreshToken (for JWT refresh token system)
+- PengajarInvitation (for magic link system)
 - Semester, MataPelajaran, Kelas
 - Enrollment
 - PresensiSession, PresensiRecord
@@ -404,14 +442,16 @@ PORT=3000
 
 - [ ] Set production DATABASE_URL
 - [ ] Set strong JWT_SECRET (random 64+ chars)
+- [ ] Update FRONTEND_URL for magic links
 - [ ] Configure file upload directory
 - [ ] Setup reverse proxy (nginx)
 - [ ] Enable SSL/TLS
 - [ ] Configure CORS for production domain
 - [ ] Setup database backups
 - [ ] Add rate limiting
-- [ ] Configure logging
-- [ ] Setup monitoring
+- [ ] Configure logging & monitoring
+- [ ] Setup email service for magic links
+- [ ] Review [SECURITY.md](./SECURITY.md) checklist
 
 ---
 
@@ -455,13 +495,28 @@ pnpm prisma:reset       # Reset database (⚠️ deletes data)
 
 ## 🤝 Contributing
 
-This is a private project for Halaqoh Cinta Qur'an. For internal development:
+See **[GIT_HOOKS.md](./GIT_HOOKS.md)** for Git hooks and quality checks.
+
+This project uses:
+- ✅ **Husky** - Git hooks for pre-commit checks
+- ✅ **Lint-staged** - Run linters on staged files only
+- ✅ **ESLint** - Code linting and auto-fixing
+- ✅ **Prettier** - Code formatting
+- ✅ **Jest** - Automated testing
+
+For internal development:
 
 1. Create feature branch: `git checkout -b feature/new-feature`
 2. Make changes and test
-3. Commit: `git commit -m 'Add new feature'`
-4. Push: `git push origin feature/new-feature`
-5. Create Pull Request
+3. Stage files: `git add .`
+4. Commit (hooks run automatically): `git commit -m 'feat: add new feature'`
+5. Push: `git push origin feature/new-feature`
+6. Create Pull Request
+
+**Note:** Commits will be blocked if:
+- ❌ ESLint errors found
+- ❌ Tests fail
+- ❌ Commit message < 10 characters
 
 ---
 
@@ -472,6 +527,14 @@ This is a private project for Halaqoh Cinta Qur'an. For internal development:
 **Started:** November 2025  
 **Status:** Production Ready ✅
 
+## 📝 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+### Third-Party Licenses
+
+See [LICENSE_THIRD_PARTY.md](LICENSE_THIRD_PARTY.md) for attribution of open-source dependencies.
+
 ---
 
 ## 📞 Support
@@ -479,6 +542,10 @@ This is a private project for Halaqoh Cinta Qur'an. For internal development:
 For questions or issues:
 
 - Check [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+- Review [SECURITY.md](./SECURITY.md) for security guidelines
+- Review [REFRESH_TOKEN.md](./REFRESH_TOKEN.md) for JWT refresh token implementation
+- Review [GIT_HOOKS.md](./GIT_HOOKS.md) for development workflow
+- Check [TESTING.md](./TESTING.md) for testing guide
 - Review [PROGRESS.md](./PROGRESS.md) for feature status
 - Check error logs in terminal
 - Verify database connection

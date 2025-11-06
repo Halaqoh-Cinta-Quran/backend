@@ -98,6 +98,7 @@ curl http://localhost:3000/api/v1/auth/login
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "a1b2c3d4e5f6...",
   "user": {
     "id": "uuid",
     "email": "admin@hcq.com",
@@ -106,6 +107,94 @@ curl http://localhost:3000/api/v1/auth/login
   }
 }
 ```
+
+**Token Information:**
+
+- **Access Token**: Short-lived (15 minutes), used for API authentication
+- **Refresh Token**: Long-lived (7 days), used to obtain new access tokens
+
+### Refresh Token
+
+**Endpoint:** `POST /api/v1/auth/refresh`
+
+**Public:** Yes
+
+**Description:** Obtain a new access token using a valid refresh token.
+
+**Request:**
+
+```json
+{
+  "refreshToken": "a1b2c3d4e5f6..."
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "x9y8z7w6v5u4...",
+  "user": {
+    "id": "uuid",
+    "email": "admin@hcq.com",
+    "nama": "Admin HCQ",
+    "role": "ADMIN"
+  }
+}
+```
+
+**Notes:**
+
+- Old refresh token is invalidated after use
+- New refresh token is generated with each refresh
+- Refresh token rotation for enhanced security
+
+**Error Responses:**
+
+```json
+// Invalid refresh token
+{
+  "statusCode": 401,
+  "message": "Invalid refresh token"
+}
+
+// Expired refresh token
+{
+  "statusCode": 401,
+  "message": "Refresh token expired"
+}
+```
+
+### Logout
+
+**Endpoint:** `POST /api/v1/auth/logout`
+
+**Public:** Yes
+
+**Description:** Invalidate a refresh token (logout).
+
+**Request:**
+
+```json
+{
+  "refreshToken": "a1b2c3d4e5f6..."
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Logged out successfully"
+}
+```
+
+**Notes:**
+
+- Deletes refresh token from database
+- Access token will still be valid until expiry (15 minutes)
+- For full logout, client should also clear stored tokens
 
 ### Register (Unified Endpoint)
 
@@ -294,12 +383,12 @@ Content-Type: application/json
 
 ### Get Current User
 
-**Endpoint:** `GET /auth/me`
+**Endpoint:** `GET /api/v1/auth/me`
 
 **Headers:**
 
 ```
-Authorization: Bearer <your-jwt-token>
+Authorization: Bearer <your-access-token>
 ```
 
 **Response:**
@@ -315,12 +404,12 @@ Authorization: Bearer <your-jwt-token>
 
 ### Change Password
 
-**Endpoint:** `PATCH /auth/change-password`
+**Endpoint:** `PATCH /api/v1/auth/change-password`
 
 **Headers:**
 
 ```
-Authorization: Bearer <your-jwt-token>
+Authorization: Bearer <your-access-token>
 ```
 
 **Description:** Allows authenticated users to change their password.
@@ -1707,6 +1796,53 @@ curl -X POST http://localhost:3000/api/v1/nilai/entry \
 curl http://localhost:3000/api/v1/nilai/saya \
   -H "Authorization: Bearer PELAJAR_TOKEN"
 ```
+
+### Scenario 7: Token Refresh & Session Management
+
+```bash
+# 1. User Logs In
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@hcq.com","password":"admin123"}'
+
+# Response includes both tokens:
+# {
+#   "accessToken": "eyJhbGci...",
+#   "refreshToken": "a1b2c3d4...",
+#   "user": { ... }
+# }
+
+# 2. Use Access Token for API Calls
+curl http://localhost:3000/api/v1/auth/me \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+
+# 3. When Access Token Expires (after 15 minutes), Refresh It
+curl -X POST http://localhost:3000/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"a1b2c3d4..."}'
+
+# Response with new tokens:
+# {
+#   "accessToken": "eyJhbGci...",  (new)
+#   "refreshToken": "x9y8z7w6...",  (new)
+#   "user": { ... }
+# }
+
+# 4. Logout (Invalidate Refresh Token)
+curl -X POST http://localhost:3000/api/v1/auth/logout \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"x9y8z7w6..."}'
+
+# Response: { "message": "Logged out successfully" }
+```
+
+**Token Management Best Practices:**
+
+- 🔑 Store refresh token securely (httpOnly cookie recommended)
+- ⏰ Refresh access token before it expires
+- 🔄 Implement automatic token refresh in frontend
+- 🚪 Always logout to invalidate refresh tokens
+- 🔒 Never expose refresh tokens in URLs or logs
 
 ---
 

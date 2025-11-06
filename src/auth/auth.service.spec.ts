@@ -26,6 +26,12 @@ describe('AuthService', () => {
       update: jest.fn(),
       upsert: jest.fn(),
     },
+    refreshToken: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+    },
   };
 
   const mockJwtService = {
@@ -224,12 +230,20 @@ describe('AuthService', () => {
 
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
       mockJwtService.signAsync.mockResolvedValue('mock-jwt-token');
+      mockPrismaService.refreshToken.create.mockResolvedValue({
+        id: 'refresh-1',
+        token: 'mock-refresh-token',
+        userId: '1',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
 
       const result = await service.login(loginDto);
 
       expect(result).toHaveProperty('accessToken', 'mock-jwt-token');
+      expect(result).toHaveProperty('refreshToken');
       expect(result).toHaveProperty('user');
       expect(result.user.email).toBe(loginDto.email);
+      expect(mockPrismaService.refreshToken.create).toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException if user not found', async () => {

@@ -10,7 +10,12 @@ import {
   Query,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto, RegisterPelajarDto, ChangePasswordDto } from './dto';
+import {
+  LoginDto,
+  RegisterPelajarDto,
+  ChangePasswordDto,
+  RefreshTokenDto,
+} from './dto';
 import { Roles, CurrentUser } from './decorators';
 import { JwtAuthGuard, RolesGuard } from './guards';
 import type { Request } from 'express';
@@ -58,5 +63,17 @@ export class AuthController {
     @Body() changePasswordDto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(user.sub, changePasswordDto);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshTokens(refreshTokenDto);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.logout(refreshTokenDto.refreshToken);
   }
 }
