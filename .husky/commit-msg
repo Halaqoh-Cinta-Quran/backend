@@ -1,0 +1,16 @@
+# Get the commit message
+commit_msg=$(cat "$1")
+
+# Check if commit message is not empty
+if [ -z "$commit_msg" ]; then
+  echo "❌ Commit message cannot be empty!"
+  exit 1
+fi
+
+# Check minimum length (at least 10 characters)
+if [ ${#commit_msg} -lt 10 ]; then
+  echo "❌ Commit message too short! Minimum 10 characters."
+  exit 1
+fi
+
+echo "✅ Commit message looks good!"
