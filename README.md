@@ -45,7 +45,6 @@
 - **Authentication:** Passport + JWT
 - **Validation:** class-validator + class-transformer
 - **File Upload:** Multer
-- **Type-Safe API:** tRPC 11.x + Zod
 - **Package Manager:** pnpm
 
 ---

@@ -288,7 +288,12 @@ describe('AuthService', () => {
         id: '1',
         email: 'test@example.com',
         nama: 'Test User',
+        fullName: 'Test User Full',
+        cities: 'Test City',
+        address: 'Test Address',
+        phoneNumber: '08123456789',
         role: Role.PELAJAR,
+        createdAt: new Date(),
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
@@ -302,17 +307,22 @@ describe('AuthService', () => {
           id: true,
           email: true,
           nama: true,
+          fullName: true,
+          cities: true,
+          address: true,
+          phoneNumber: true,
           role: true,
+          createdAt: true,
         },
       });
     });
 
-    it('should return null when user not found', async () => {
+    it('should throw UnauthorizedException when user not found', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
 
-      const result = await service.validateUser('nonexistent-id');
-
-      expect(result).toBeNull();
+      await expect(service.validateUser('nonexistent-id')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 

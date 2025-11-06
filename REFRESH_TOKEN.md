@@ -7,6 +7,7 @@ This API implements a secure JWT refresh token system with the following feature
 - **Short-lived Access Tokens** (15 minutes)
 - **Long-lived Refresh Tokens** (7 days)
 - **Token Rotation** - New refresh token issued on each refresh
+- **HTTP-Only Cookies** - Refresh tokens sent via secure cookies
 - **Secure Storage** - Refresh tokens stored in database
 - **Automatic Cleanup** - Expired tokens are deleted
 
@@ -16,15 +17,18 @@ This API implements a secure JWT refresh token system with the following feature
 
 ### Token Types
 
-| Token Type    | Lifetime   | Storage  | Purpose                  |
-| ------------- | ---------- | -------- | ------------------------ |
-| Access Token  | 15 minutes | Memory   | API authentication       |
-| Refresh Token | 7 days     | Database | Obtain new access tokens |
+| Token Type    | Lifetime   | Storage           | Transmission     | Purpose                  |
+| ------------- | ---------- | ----------------- | ---------------- | ------------------------ |
+| Access Token  | 15 minutes | Client Memory     | Response Body    | API authentication       |
+| Refresh Token | 7 days     | Database + Cookie | HTTP-Only Cookie | Obtain new access tokens |
 
 ### Security Features
 
 - ✅ **Stateful Refresh Tokens** - Stored in database for revocation
 - ✅ **Token Rotation** - Old refresh token invalidated after use
+- ✅ **HTTP-Only Cookies** - Prevents XSS attacks (JavaScript cannot access)
+- ✅ **Secure Flag** - Cookies only sent over HTTPS in production
+- ✅ **SameSite Strict** - Prevents CSRF attacks
 - ✅ **Cryptographically Secure** - 32 bytes random tokens
 - ✅ **Expiration Tracking** - Auto-delete expired tokens
 - ✅ **User Association** - Each token linked to specific user
@@ -79,7 +83,6 @@ model RefreshToken {
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6...",
   "user": {
     "id": "uuid",
     "email": "user@example.com",
@@ -89,24 +92,39 @@ model RefreshToken {
 }
 ```
 
+**Cookie Set:**
+
+```
+Set-Cookie: refreshToken=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6...; HttpOnly; Secure; SameSite=Strict; Max-Age=604800; Path=/
+```
+
+**Cookie Attributes:**
+
+- `HttpOnly` - Cannot be accessed by JavaScript (prevents XSS)
+- `Secure` - Only sent over HTTPS in production
+- `SameSite=Strict` - Only sent to same-site requests (prevents CSRF)
+- `Max-Age=604800` - Expires in 7 days (604800 seconds)
+- `Path=/` - Available to all routes
+
 ### 2. Refresh - Get New Tokens
 
 **Endpoint:** `POST /api/v1/auth/refresh`
 
-**Request:**
+**Headers:**
 
-```json
-{
-  "refreshToken": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6..."
-}
 ```
+Cookie: refreshToken=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6...
+```
+
+**Request Body:** None (refresh token read from cookie)
+
+````
 
 **Response:**
 
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4...",
   "user": {
     "id": "uuid",
     "email": "user@example.com",
@@ -114,21 +132,37 @@ model RefreshToken {
     "role": "PELAJAR"
   }
 }
+````
+
+**Cookie Set (New Refresh Token):**
+
+```
+Set-Cookie: refreshToken=x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4...; HttpOnly; Secure; SameSite=Strict; Max-Age=604800; Path=/
 ```
 
 **Process:**
 
-1. Validate refresh token exists in database
-2. Check if token is expired
-3. Generate new access token (15 min)
-4. Generate new refresh token (7 days)
-5. Delete old refresh token
-6. Store new refresh token
-7. Return both tokens
+1. Read refresh token from HTTP-only cookie
+2. Validate refresh token exists in database
+3. Check if token is expired
+4. Generate new access token (15 min)
+5. Generate new refresh token (7 days)
+6. Delete old refresh token from database
+7. Store new refresh token in database
+8. Set new refresh token as HTTP-only cookie
+9. Return access token and user info
 
 ### 3. Logout - Invalidate Token
 
 **Endpoint:** `POST /api/v1/auth/logout`
+
+**Headers:**
+
+```
+Cookie: refreshToken=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6...
+```
+
+**Request Body:** None (refresh token read from cookie)
 
 **Request:**
 
@@ -146,16 +180,24 @@ model RefreshToken {
 }
 ```
 
+**Cookie Cleared:**
+
+```
+Set-Cookie: refreshToken=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/
+```
+
 **Process:**
 
-1. Delete refresh token from database
-2. Access token remains valid until expiry
+1. Read refresh token from HTTP-only cookie
+2. Delete refresh token from database
+3. Clear refresh token cookie
+4. Access token remains valid until expiry (15 min max)
 
 ---
 
 ## 💻 Frontend Implementation
 
-### React/Next.js Example
+### React/Next.js Example with HTTP-Only Cookies
 
 ```typescript
 // utils/auth.ts
@@ -163,74 +205,141 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:4000/api/v1';
 
-interface AuthTokens {
+interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
+  user: {
+    id: string;
+    email: string;
+    nama: string;
+    role: string;
+  };
+}
+
+// Create axios instance with credentials enabled
+const apiClient = axios.create({
+  baseURL: API_URL,
+  withCredentials: true, // Important: Send cookies with requests
+});
+
+export const authService = {
+  // Login - receives access token in response, refresh token in cookie
+  async login(email: string, password: string): Promise<AuthResponse> {
+    const { data } = await apiClient.post<AuthResponse>('/auth/login', {
+      email,
+      password,
+    });
+
+    // Store access token in memory/state (not localStorage for security)
+    return data;
+  },
+
+  // Refresh - automatically sends refresh token from cookie
+  async refreshToken(): Promise<AuthResponse> {
+    const { data } = await apiClient.post<AuthResponse>('/auth/refresh');
+    return data;
+  },
+
+  // Logout - automatically sends refresh token from cookie
+  async logout(): Promise<void> {
+    await apiClient.post('/auth/logout');
+  },
+
+  // Get current user
+  async getCurrentUser(accessToken: string) {
+    const { data } = await apiClient.get('/auth/me', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    return data;
+  },
+};
+```
+
+refreshToken: string;
 }
 
 // Store tokens in localStorage (or httpOnly cookies in production)
 export const setTokens = (tokens: AuthTokens) => {
-  localStorage.setItem('accessToken', tokens.accessToken);
-  localStorage.setItem('refreshToken', tokens.refreshToken);
+localStorage.setItem('accessToken', tokens.accessToken);
+localStorage.setItem('refreshToken', tokens.refreshToken);
 };
 
 export const getAccessToken = () => localStorage.getItem('accessToken');
 export const getRefreshToken = () => localStorage.getItem('refreshToken');
 
 export const clearTokens = () => {
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
+localStorage.removeItem('accessToken');
+localStorage.removeItem('refreshToken');
 };
 
 // Login
 export const login = async (email: string, password: string) => {
-  const response = await axios.post(`${API_URL}/auth/login`, {
-    email,
-    password,
-  });
-  setTokens(response.data);
-  return response.data;
+const response = await axios.post(`${API_URL}/auth/login`, {
+email,
+password,
+});
+setTokens(response.data);
+return response.data;
 };
 
 // Refresh tokens
 export const refreshTokens = async () => {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) throw new Error('No refresh token');
+const refreshToken = getRefreshToken();
+if (!refreshToken) throw new Error('No refresh token');
 
-  const response = await axios.post(`${API_URL}/auth/refresh`, {
-    refreshToken,
-  });
-  setTokens(response.data);
-  return response.data;
+const response = await axios.post(`${API_URL}/auth/refresh`, {
+refreshToken,
+});
+setTokens(response.data);
+return response.data;
 };
 
 // Logout
 export const logout = async () => {
-  const refreshToken = getRefreshToken();
-  if (refreshToken) {
-    await axios.post(`${API_URL}/auth/logout`, { refreshToken });
-  }
-  clearTokens();
+const refreshToken = getRefreshToken();
+if (refreshToken) {
+await axios.post(`${API_URL}/auth/logout`, { refreshToken });
+}
+clearTokens();
 };
-```
+
+````
 
 ### Axios Interceptor for Auto-Refresh
 
 ```typescript
 // utils/axios.ts
 import axios from 'axios';
-import { getAccessToken, refreshTokens, clearTokens } from './auth';
 
+const API_URL = 'http://localhost:4000/api/v1';
+
+// Create axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:4000/api/v1',
+  baseURL: API_URL,
+  withCredentials: true, // Important: Send cookies with requests
 });
 
-// Request interceptor - Add access token
+let accessToken: string | null = null;
+
+// Function to set access token
+export const setAccessToken = (token: string) => {
+  accessToken = token;
+};
+
+// Function to get access token
+export const getAccessToken = () => accessToken;
+
+// Function to clear access token
+export const clearAccessToken = () => {
+  accessToken = null;
+};
+
+// Request interceptor - Add access token to headers
 api.interceptors.request.use(
   (config) => {
-    const token = getAccessToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
     return config;
   },
@@ -248,16 +357,22 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        // Refresh tokens
-        await refreshTokens();
+        // Refresh tokens (refresh token sent automatically via cookie)
+        const { data } = await axios.post(
+          `${API_URL}/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
+
+        // Update access token
+        setAccessToken(data.accessToken);
 
         // Retry original request with new token
-        const token = getAccessToken();
-        originalRequest.headers.Authorization = `Bearer ${token}`;
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed - logout user
-        clearTokens();
+        clearAccessToken();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
@@ -268,14 +383,63 @@ api.interceptors.response.use(
 );
 
 export default api;
-```
+````
 
 ### Usage in Components
 
 ```typescript
+// pages/login.tsx
+import { useState } from 'react';
+import { authService } from '@/utils/auth';
+import { setAccessToken } from '@/utils/axios';
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      // Login - refresh token stored in HTTP-only cookie automatically
+      const data = await authService.login(email, password);
+
+      // Store access token in memory (not localStorage for security)
+      setAccessToken(data.accessToken);
+
+      // Redirect to dashboard
+      window.location.href = '/dashboard';
+    } catch (error) {
+      console.error('Login failed:', error);
+    }
+  };
+
+  return (
+    <form onSubmit={handleLogin}>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+      />
+      <button type="submit">Login</button>
+    </form>
+  );
+}
+```
+
+```typescript
 // pages/dashboard.tsx
+import { useEffect, useState } from 'react';
 import api from '@/utils/axios';
-import { logout } from '@/utils/auth';
+import { authService } from '@/utils/auth';
+import { clearAccessToken } from '@/utils/axios';
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
@@ -283,18 +447,20 @@ export default function Dashboard() {
   useEffect(() => {
     // Automatically handles token refresh if needed
     api.get('/auth/me')
-      .then(res => setData(res.data))
-      .catch(err => console.error(err));
+      .then((res) => setData(res.data))
+      .catch((err) => console.error(err));
   }, []);
 
   const handleLogout = async () => {
-    await logout();
-    router.push('/login');
+    await authService.logout();
+    clearAccessToken();
+    window.location.href = '/login';
   };
 
   return (
     <div>
       <h1>Dashboard</h1>
+      <pre>{JSON.stringify(data, null, 2)}</pre>
       <button onClick={handleLogout}>Logout</button>
     </div>
   );
@@ -304,6 +470,13 @@ export default function Dashboard() {
 ---
 
 ## 🔒 Security Best Practices
+
+### HTTP-Only Cookie Benefits
+
+1. **XSS Protection** - JavaScript cannot access the cookie
+2. **Automatic Transmission** - Browser sends cookie automatically
+3. **CSRF Protection** - SameSite=Strict prevents cross-site requests
+4. **Secure Transmission** - Only sent over HTTPS in production
 
 ### Production Recommendations
 

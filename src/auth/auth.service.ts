@@ -200,9 +200,18 @@ export class AuthService {
         id: true,
         email: true,
         nama: true,
+        fullName: true,
+        cities: true,
+        address: true,
+        phoneNumber: true,
         role: true,
+        createdAt: true,
       },
     });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
 
     return user;
   }

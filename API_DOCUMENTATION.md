@@ -98,7 +98,6 @@ curl http://localhost:3000/api/v1/auth/login
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "a1b2c3d4e5f6...",
   "user": {
     "id": "uuid",
     "email": "admin@hcq.com",
@@ -108,10 +107,21 @@ curl http://localhost:3000/api/v1/auth/login
 }
 ```
 
+**Cookie Set:**
+
+```
+Set-Cookie: refreshToken=a1b2c3d4e5f6...; HttpOnly; Secure; SameSite=Strict; Max-Age=604800; Path=/
+```
+
 **Token Information:**
 
-- **Access Token**: Short-lived (15 minutes), used for API authentication
-- **Refresh Token**: Long-lived (7 days), used to obtain new access tokens
+- **Access Token**: Short-lived (15 minutes), included in response body, used for API authentication
+- **Refresh Token**: Long-lived (7 days), sent as HTTP-only cookie, used to obtain new access tokens
+- **Cookie Attributes**:
+  - `HttpOnly` - Cannot be accessed by JavaScript (prevents XSS attacks)
+  - `Secure` - Only sent over HTTPS in production
+  - `SameSite=Strict` - Prevents CSRF attacks
+  - `Max-Age=604800` - Expires in 7 days
 
 ### Refresh Token
 
@@ -119,22 +129,21 @@ curl http://localhost:3000/api/v1/auth/login
 
 **Public:** Yes
 
-**Description:** Obtain a new access token using a valid refresh token.
+**Description:** Obtain a new access token using a valid refresh token from HTTP-only cookie.
 
-**Request:**
+**Headers:**
 
-```json
-{
-  "refreshToken": "a1b2c3d4e5f6..."
-}
 ```
+Cookie: refreshToken=a1b2c3d4e5f6...
+```
+
+**Request Body:** None (refresh token automatically read from cookie)
 
 **Response (200 OK):**
 
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "x9y8z7w6v5u4...",
   "user": {
     "id": "uuid",
     "email": "admin@hcq.com",
@@ -144,15 +153,28 @@ curl http://localhost:3000/api/v1/auth/login
 }
 ```
 
+**Cookie Set (New Refresh Token):**
+
+```
+Set-Cookie: refreshToken=x9y8z7w6v5u4...; HttpOnly; Secure; SameSite=Strict; Max-Age=604800; Path=/
+```
+
 **Notes:**
 
-- Old refresh token is invalidated after use
-- New refresh token is generated with each refresh
+- Refresh token is automatically sent via cookie
+- Old refresh token is invalidated after use (deleted from database)
+- New refresh token is generated and set as cookie with each refresh
 - Refresh token rotation for enhanced security
 
 **Error Responses:**
 
 ```json
+// Refresh token not found in cookies
+{
+  "statusCode": 500,
+  "message": "Refresh token not found in cookies"
+}
+
 // Invalid refresh token
 {
   "statusCode": 401,
@@ -172,15 +194,15 @@ curl http://localhost:3000/api/v1/auth/login
 
 **Public:** Yes
 
-**Description:** Invalidate a refresh token (logout).
+**Description:** Invalidate a refresh token (logout) by deleting it from database and clearing cookie.
 
-**Request:**
+**Headers:**
 
-```json
-{
-  "refreshToken": "a1b2c3d4e5f6..."
-}
 ```
+Cookie: refreshToken=a1b2c3d4e5f6...
+```
+
+**Request Body:** None (refresh token automatically read from cookie)
 
 **Response (200 OK):**
 
@@ -189,6 +211,18 @@ curl http://localhost:3000/api/v1/auth/login
   "message": "Logged out successfully"
 }
 ```
+
+**Cookie Cleared:**
+
+```
+Set-Cookie: refreshToken=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/
+```
+
+**Notes:**
+
+- Deletes refresh token from database
+- Clears refresh token cookie
+- Access token remains valid until expiry (15 minutes max)
 
 **Notes:**
 
@@ -391,6 +425,8 @@ Content-Type: application/json
 Authorization: Bearer <your-access-token>
 ```
 
+**Description:** Returns the currently authenticated user's profile information.
+
 **Response:**
 
 ```json
@@ -398,7 +434,21 @@ Authorization: Bearer <your-access-token>
   "id": "uuid",
   "email": "user@hcq.com",
   "nama": "User Name",
-  "role": "PELAJAR"
+  "fullName": "User Full Name",
+  "cities": "Jakarta",
+  "address": "Jl. Example No. 123",
+  "phoneNumber": "081234567890",
+  "role": "PELAJAR",
+  "createdAt": "2025-11-06T..."
+}
+```
+
+**Error Response:**
+
+```json
+{
+  "statusCode": 401,
+  "message": "User not found"
 }
 ```
 
