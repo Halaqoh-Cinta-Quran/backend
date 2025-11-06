@@ -138,6 +138,7 @@ curl http://localhost:3000/trpc/auth.login
 ```
 
 **Validation:**
+
 - Email must be valid format
 - Password minimum 6 characters
 - Nama (name) is required
@@ -231,6 +232,7 @@ Authorization: Bearer <your-jwt-token>
 ```
 
 **Validation:**
+
 - Old password must be correct
 - New password must be at least 6 characters
 - New password must be different from old password

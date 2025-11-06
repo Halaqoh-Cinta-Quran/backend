@@ -168,12 +168,14 @@ POST /auth/register/pelajar
 ```
 
 **Features:**
+
 - ✅ No authentication required
 - ✅ Automatic PELAJAR role assignment
 - ✅ Instant account creation
 - ✅ Ready to enroll in classes
 
 **Example:**
+
 ```json
 {
   "email": "student@example.com",
@@ -192,12 +194,14 @@ Authorization: Bearer <admin-token>
 ```
 
 **Features:**
+
 - 🔒 Admin authentication required
 - 🔒 Can only create PENGAJAR or ADMIN roles
 - 🚫 PELAJAR registration through this endpoint is forbidden
 - ✅ Full control over staff accounts
 
 **Why Two Endpoints?**
+
 - **Security:** Prevents unauthorized privilege escalation
 - **UX:** Students don't need to contact admin for registration
 - **Control:** Admin maintains full control over staff accounts
@@ -361,6 +365,7 @@ pnpm run format
 - ✅ **Privilege Escalation Prevention** - ForbiddenException for invalid role creation
 
 **Security Best Practices:**
+
 - Argon2 provides better resistance to GPU-based attacks than bcrypt
 - JWT secrets should be 64+ random characters in production
 - Environment variables never committed to git
