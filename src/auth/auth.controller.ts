@@ -1,11 +1,16 @@
-import { Controller, Post, Body, UseGuards, Get, Patch } from '@nestjs/common';
-import { AuthService } from './auth.service';
 import {
-  LoginDto,
-  RegisterDto,
-  RegisterPelajarDto,
-  ChangePasswordDto,
-} from './dto';
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Get,
+  Patch,
+  HttpCode,
+  HttpStatus,
+  Query,
+} from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { LoginDto, RegisterPelajarDto, ChangePasswordDto } from './dto';
 import { Roles, CurrentUser } from './decorators';
 import { JwtAuthGuard, RolesGuard } from './guards';
 import type { Request } from 'express';
@@ -15,18 +20,27 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
-  }
-
-  @Post('register/pelajar')
-  async registerPelajar(@Body() registerDto: RegisterPelajarDto) {
+  async register(
+    @Body() registerDto: RegisterPelajarDto,
+    @Query('token') token?: string,
+  ) {
+    // If token exists, register as pengajar with token validation
+    if (token) {
+      return this.authService.registerPengajarWithToken(registerDto, token);
+    }
+    // Otherwise, register as pelajar
     return this.authService.registerPelajar(registerDto);
   }
 
+  @Post('invite-pengajar')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async invitePengajar(@Body('email') email: string) {
+    return this.authService.createPengajarInvitation(email);
+  }
+
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }

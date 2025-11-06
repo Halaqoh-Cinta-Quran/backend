@@ -2,18 +2,13 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
-  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as argon2 from 'argon2';
-import {
-  RegisterDto,
-  LoginDto,
-  RegisterPelajarDto,
-  ChangePasswordDto,
-} from './dto';
+import * as crypto from 'crypto';
+import { LoginDto, RegisterPelajarDto, ChangePasswordDto } from './dto';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -23,54 +18,9 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(registerDto: RegisterDto) {
-    const { email, password, nama, role } = registerDto;
-
-    // Only ADMIN and PENGAJAR can be created through this endpoint
-    // PELAJAR should use registerPelajar endpoint
-    if (role === 'PELAJAR') {
-      throw new ForbiddenException(
-        'Use /auth/register/pelajar endpoint to register as student',
-      );
-    }
-
-    // Check if user already exists
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('Email already registered');
-    }
-
-    // Hash password with Argon2
-    const hashedPassword = await argon2.hash(password);
-
-    // Create user
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        nama,
-        role,
-      },
-      select: {
-        id: true,
-        email: true,
-        nama: true,
-        role: true,
-        createdAt: true,
-      },
-    });
-
-    return {
-      message: 'User registered successfully',
-      user,
-    };
-  }
-
   async registerPelajar(registerDto: RegisterPelajarDto) {
-    const { email, password, nama } = registerDto;
+    const { email, password, nama, fullName, cities, address, phoneNumber } =
+      registerDto;
 
     // Check if user already exists
     const existingUser = await this.prisma.user.findUnique({
@@ -90,12 +40,20 @@ export class AuthService {
         email,
         password: hashedPassword,
         nama,
+        fullName,
+        cities,
+        address,
+        phoneNumber,
         role: Role.PELAJAR, // Always PELAJAR for this endpoint
       },
       select: {
         id: true,
         email: true,
         nama: true,
+        fullName: true,
+        cities: true,
+        address: true,
+        phoneNumber: true,
         role: true,
         createdAt: true,
       },
@@ -199,6 +157,137 @@ export class AuthService {
 
     return {
       message: 'Password berhasil diubah',
+    };
+  }
+
+  async createPengajarInvitation(email: string) {
+    // Check if user already exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
+    }
+
+    // Check if invitation already exists and not used
+    const existingInvitation = await this.prisma.pengajarInvitation.findUnique({
+      where: { email },
+    });
+
+    if (existingInvitation && !existingInvitation.used) {
+      throw new ConflictException('Invitation already sent to this email');
+    }
+
+    // Generate random token
+    const token = crypto.randomBytes(32).toString('hex');
+
+    // Set expiration to 7 days from now
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // Create or update invitation
+    const invitation = await this.prisma.pengajarInvitation.upsert({
+      where: { email },
+      update: {
+        token,
+        expiresAt,
+        used: false,
+      },
+      create: {
+        email,
+        token,
+        expiresAt,
+      },
+    });
+
+    // TODO: Send email with magic link
+    // For now, return the token directly
+    const magicLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/register?token=${token}`;
+
+    return {
+      message: 'Invitation created successfully',
+      email: invitation.email,
+      magicLink, // In production, this should be sent via email
+      expiresAt: invitation.expiresAt,
+    };
+  }
+
+  async registerPengajarWithToken(
+    registerDto: RegisterPelajarDto,
+    token: string,
+  ) {
+    // Find and validate invitation
+    const invitation = await this.prisma.pengajarInvitation.findUnique({
+      where: { token },
+    });
+
+    if (!invitation) {
+      throw new BadRequestException('Invalid invitation token');
+    }
+
+    if (invitation.used) {
+      throw new BadRequestException('Invitation token already used');
+    }
+
+    if (new Date() > invitation.expiresAt) {
+      throw new BadRequestException('Invitation token expired');
+    }
+
+    // Check if email matches
+    if (invitation.email !== registerDto.email) {
+      throw new BadRequestException('Email does not match invitation');
+    }
+
+    // Check if user already exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: registerDto.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
+    }
+
+    const { email, password, nama, fullName, cities, address, phoneNumber } =
+      registerDto;
+
+    // Hash password with Argon2
+    const hashedPassword = await argon2.hash(password);
+
+    // Create user with PENGAJAR role
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        nama,
+        fullName,
+        cities,
+        address,
+        phoneNumber,
+        role: Role.PENGAJAR, // Always PENGAJAR when using token
+      },
+      select: {
+        id: true,
+        email: true,
+        nama: true,
+        fullName: true,
+        cities: true,
+        address: true,
+        phoneNumber: true,
+        role: true,
+        createdAt: true,
+      },
+    });
+
+    // Mark invitation as used
+    await this.prisma.pengajarInvitation.update({
+      where: { token },
+      data: { used: true },
+    });
+
+    return {
+      message: 'Teacher registered successfully',
+      user,
     };
   }
 }

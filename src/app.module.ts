@@ -14,7 +14,6 @@ import { AnnouncementModule } from './announcement/announcement.module';
 import { SppModule } from './spp/spp.module';
 import { GajiModule } from './gaji/gaji.module';
 import { MateriModule } from './materi/materi.module';
-import { TrpcModule } from './trpc/trpc.module';
 
 @Module({
   imports: [
@@ -34,7 +33,6 @@ import { TrpcModule } from './trpc/trpc.module';
     SppModule,
     GajiModule,
     MateriModule,
-    TrpcModule,
   ],
   controllers: [AppController],
   providers: [AppService],

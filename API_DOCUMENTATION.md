@@ -20,9 +20,8 @@
    - [Announcement](#announcement)
    - [SPP](#spp)
    - [Gaji](#gaji)
-4. [tRPC API](#-trpc-api)
-5. [Authorization Matrix](#-authorization-matrix)
-6. [Error Handling](#-error-handling)
+4. [Authorization Matrix](#-authorization-matrix)
+5. [Error Handling](#-error-handling)
 
 ---
 
@@ -31,8 +30,15 @@
 ### Base URL
 
 ```
-http://localhost:3000
+Production: http://localhost:3000/api/v1
 ```
+
+**CORS Configuration:**
+
+- Allowed Origins: `http://localhost:3000` (frontend)
+- Credentials: Enabled
+- Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+- Headers: Content-Type, Authorization
 
 ### Quick Start
 
@@ -65,10 +71,7 @@ pnpm run start:dev
 
 ```bash
 # REST API
-curl http://localhost:3000/auth/login
-
-# tRPC API
-curl http://localhost:3000/trpc/auth.login
+curl http://localhost:3000/api/v1/auth/login
 ```
 
 ---
@@ -77,7 +80,7 @@ curl http://localhost:3000/trpc/auth.login
 
 ### Login
 
-**Endpoint:** `POST /auth/login`
+**Endpoint:** `POST /api/v1/auth/login`
 
 **Public:** Yes
 
@@ -90,7 +93,7 @@ curl http://localhost:3000/trpc/auth.login
 }
 ```
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -104,13 +107,18 @@ curl http://localhost:3000/trpc/auth.login
 }
 ```
 
-### Register Student (Public)
+### Register (Unified Endpoint)
 
-**Endpoint:** `POST /auth/register/pelajar`
+**Endpoint:** `POST /api/v1/auth/register`
 
-**Public:** Yes ✅ (No authentication required)
+**Public:** Yes (for PELAJAR) / Token-based (for PENGAJAR)
 
-**Description:** Students can self-register without admin intervention.
+**Description:**
+
+- **Without token**: Registers as PELAJAR (student self-registration)
+- **With token** (`?token=xxx`): Registers as PENGAJAR using magic link from admin invitation
+
+#### Register as PELAJAR (No Token)
 
 **Request:**
 
@@ -118,7 +126,11 @@ curl http://localhost:3000/trpc/auth.login
 {
   "email": "student@example.com",
   "password": "password123",
-  "nama": "Student Name"
+  "nama": "Student Name",
+  "fullName": "Student Full Name",
+  "cities": "Jakarta",
+  "address": "Jl. Example No. 123",
+  "phoneNumber": "081234567890"
 }
 ```
 
@@ -131,22 +143,101 @@ curl http://localhost:3000/trpc/auth.login
     "id": "uuid",
     "email": "student@example.com",
     "nama": "Student Name",
+    "fullName": "Student Full Name",
+    "cities": "Jakarta",
+    "address": "Jl. Example No. 123",
+    "phoneNumber": "081234567890",
     "role": "PELAJAR",
     "createdAt": "2025-11-06T..."
   }
 }
 ```
 
-**Validation:**
+**Field Requirements:**
 
-- Email must be valid format
-- Password minimum 6 characters
-- Nama (name) is required
-- Role is automatically set to `PELAJAR`
+- `email` - Required, must be valid email format
+- `password` - Required, minimum 6 characters
+- `nama` - Required
+- `fullName` - Optional
+- `cities` - Optional
+- `address` - Optional
+- `phoneNumber` - Optional
 
-### Register Staff (Admin Only)
+#### Register as PENGAJAR (With Token)
 
-**Endpoint:** `POST /auth/register`
+**Request:**
+
+```
+POST /api/v1/auth/register?token=<magic_token>
+Content-Type: application/json
+
+{
+  "email": "teacher@hcq.com",
+  "password": "password123",
+  "nama": "Teacher Name",
+  "fullName": "Teacher Full Name",
+  "cities": "Jakarta",
+  "address": "Jl. Example No. 123",
+  "phoneNumber": "081234567890"
+}
+```
+
+**Notes:**
+
+- Email must match the invited email
+- Token must be valid and not expired (7 days validity)
+- Token can only be used once
+
+**Response:**
+
+```json
+{
+  "message": "Teacher registered successfully",
+  "user": {
+    "id": "uuid",
+    "email": "teacher@hcq.com",
+    "nama": "Teacher Name",
+    "fullName": "Teacher Full Name",
+    "cities": "Jakarta",
+    "address": "Jl. Example No. 123",
+    "phoneNumber": "081234567890",
+    "role": "PENGAJAR",
+    "createdAt": "2025-11-06T..."
+  }
+}
+```
+
+**Error Responses:**
+
+```json
+// Invalid token
+{
+  "statusCode": 400,
+  "message": "Invalid invitation token"
+}
+
+// Token already used
+{
+  "statusCode": 400,
+  "message": "Invitation token already used"
+}
+
+// Token expired
+{
+  "statusCode": 400,
+  "message": "Invitation token expired"
+}
+
+// Email mismatch
+{
+  "statusCode": 400,
+  "message": "Email does not match invitation"
+}
+```
+
+### Invite Pengajar (Admin Only)
+
+**Endpoint:** `POST /api/v1/auth/invite-pengajar`
 
 **Public:** No 🔒 (Admin only)
 
@@ -157,35 +248,47 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 ```
 
-**Description:** Only admins can create ADMIN or PENGAJAR accounts.
+**Description:** Admin creates an invitation for a new teacher. The system generates a magic link with a unique token that expires in 7 days.
 
 **Request:**
 
 ```json
 {
-  "email": "teacher@hcq.com",
-  "password": "password123",
-  "nama": "Teacher Name",
-  "role": "PENGAJAR"
+  "email": "newteacher@hcq.com"
 }
 ```
-
-**Allowed Roles:** `ADMIN`, `PENGAJAR`
-
-**Note:** Attempting to register PELAJAR through this endpoint will return 403 Forbidden. Use `/auth/register/pelajar` instead.
 
 **Response:**
 
 ```json
 {
-  "message": "User registered successfully",
-  "user": {
-    "id": "uuid",
-    "email": "teacher@hcq.com",
-    "nama": "Teacher Name",
-    "role": "PENGAJAR",
-    "createdAt": "2025-11-06T..."
-  }
+  "message": "Invitation created successfully",
+  "email": "newteacher@hcq.com",
+  "magicLink": "http://localhost:3000/register?token=abc123def456...",
+  "expiresAt": "2025-11-13T12:00:00.000Z"
+}
+```
+
+**Notes:**
+
+- The `magicLink` should be sent to the teacher via email
+- In development, the link is returned in the response
+- Token expires after 7 days
+- If an unused invitation already exists for the email, a new token will be generated
+
+**Error Responses:**
+
+```json
+// Email already registered
+{
+  "statusCode": 409,
+  "message": "Email already registered"
+}
+
+// Active invitation exists
+{
+  "statusCode": 409,
+  "message": "Invitation already sent to this email"
 }
 ```
 
@@ -1035,7 +1138,7 @@ Content-Length: 2048576
 **JavaScript Example:**
 
 ```javascript
-fetch('http://localhost:3000/materi/file/download/file-uuid', {
+fetch('http://localhost:3000/api/v1/materi/file/download/file-uuid', {
   headers: { Authorization: 'Bearer YOUR_TOKEN' },
 })
   .then((res) => res.blob())
@@ -1342,250 +1445,27 @@ Authorization: Bearer <admin-token>
 
 ---
 
-## 🚀 tRPC API
+## Authorization Matrix
 
-### Overview
-
-tRPC provides end-to-end type safety between backend and frontend without code generation.
-
-**Base URL:** `http://localhost:3000/trpc`
-
-### Available Routers
-
-#### 1. Auth Router
-
-**Login:**
-
-```typescript
-const { access_token, user } = await trpc.auth.login.mutate({
-  email: 'admin@hcq.com',
-  password: 'admin123',
-});
-```
-
-**Register:**
-
-```typescript
-const user = await trpc.auth.register.mutate({
-  email: 'newuser@hcq.com',
-  password: 'password123',
-  nama: 'Ahmad Rizki',
-  role: 'PELAJAR',
-});
-```
-
-**Get Current User:**
-
-```typescript
-const user = await trpc.auth.me.query();
-```
-
-#### 2. Kelas Router
-
-**Get All Kelas:**
-
-```typescript
-const kelasList = await trpc.kelas.getAll.query();
-```
-
-**Get Kelas by ID:**
-
-```typescript
-const kelas = await trpc.kelas.getById.query({ id: 'uuid' });
-```
-
-**Create Kelas (Admin):**
-
-```typescript
-const newKelas = await trpc.kelas.create.mutate({
-  namaKelas: 'Tahsin - Kelas Sore',
-  jadwalHari: 'Selasa',
-  jadwalJam: '16:00',
-  semesterId: 'uuid',
-  mataPelajaranId: 'uuid',
-});
-```
-
-**Enroll Pelajar (Admin):**
-
-```typescript
-await trpc.kelas.enrollPelajar.mutate({
-  kelasId: 'uuid',
-  userId: 'uuid',
-});
-```
-
-**Get My Kelas:**
-
-```typescript
-const myKelas = await trpc.kelas.getMyKelas.query();
-```
-
-#### 3. Nilai Router
-
-**Create Komponen Nilai (Pengajar):**
-
-```typescript
-const komponen = await trpc.nilai.createKomponen.mutate({
-  kelasId: 'uuid',
-  nama: 'UTS',
-  bobot: 30,
-});
-```
-
-**Entry Nilai (Pengajar):**
-
-```typescript
-const nilai = await trpc.nilai.entryNilai.mutate({
-  komponenId: 'uuid',
-  pelajarId: 'uuid',
-  nilai: 85.5,
-});
-```
-
-**Get My Nilai (Pelajar):**
-
-```typescript
-const myNilai = await trpc.nilai.getMyNilai.query();
-```
-
-**Get Nilai by Kelas (Pengajar):**
-
-```typescript
-const kelasNilai = await trpc.nilai.getNilaiByKelas.query({
-  kelasId: 'uuid',
-});
-```
-
-### Frontend Integration (React/Next.js)
-
-**1. Install Dependencies:**
-
-```bash
-npm install @trpc/client @trpc/react-query @tanstack/react-query
-```
-
-**2. Create tRPC Client:**
-
-```typescript
-// lib/trpc.ts
-import { createTRPCReact } from '@trpc/react-query';
-import type { AppRouter } from '../backend/src/trpc/trpc.router';
-
-export const trpc = createTRPCReact<AppRouter>();
-```
-
-**3. Setup Provider:**
-
-```typescript
-// app/providers.tsx
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { httpBatchLink } from '@trpc/client';
-import { trpc } from '@/lib/trpc';
-
-export function Providers({ children }) {
-  const [queryClient] = useState(() => new QueryClient());
-  const [trpcClient] = useState(() =>
-    trpc.createClient({
-      links: [
-        httpBatchLink({
-          url: 'http://localhost:3000/trpc',
-          headers() {
-            return {
-              authorization: `Bearer ${localStorage.getItem('token')}`,
-            };
-          },
-        }),
-      ],
-    })
-  );
-
-  return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
-    </trpc.Provider>
-  );
-}
-```
-
-**4. Use in Components:**
-
-```typescript
-// components/KelasList.tsx
-import { trpc } from '@/lib/trpc';
-
-export function KelasList() {
-  const { data, isLoading } = trpc.kelas.getAll.useQuery();
-
-  if (isLoading) return <div>Loading...</div>;
-
-  return (
-    <div>
-      {data?.map(kelas => (
-        <div key={kelas.id}>
-          <h3>{kelas.namaKelas}</h3>
-          <p>{kelas.mataPelajaran.nama}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-```
-
-**5. Mutations:**
-
-```typescript
-// components/CreateKelas.tsx
-import { trpc } from '@/lib/trpc';
-
-export function CreateKelas() {
-  const utils = trpc.useContext();
-  const createKelas = trpc.kelas.create.useMutation({
-    onSuccess: () => {
-      utils.kelas.getAll.invalidate();
-    },
-  });
-
-  return (
-    <form onSubmit={e => {
-      e.preventDefault();
-      createKelas.mutate({ /* form data */ });
-    }}>
-      {/* form fields */}
-    </form>
-  );
-}
-```
-
-### tRPC Benefits
-
-✅ **Full Type Safety** - TypeScript knows exact return types  
-✅ **Auto-completion** - IDE suggestions for all routes  
-✅ **Refactoring Safety** - Frontend errors show immediately  
-✅ **No Code Generation** - Types shared directly from backend
-
----
-
-## 🔒 Authorization Matrix
-
-| Module               | Create           | Read             | Update        | Delete        |
-| -------------------- | ---------------- | ---------------- | ------------- | ------------- |
-| **User**             | ADMIN            | ADMIN            | ADMIN         | ADMIN         |
-| **Semester**         | ADMIN            | ALL              | ADMIN         | ADMIN         |
-| **Mata Pelajaran**   | ADMIN            | ALL              | ADMIN         | ADMIN         |
-| **Kelas**            | ADMIN            | ALL              | ADMIN         | ADMIN         |
-| **Enrollment**       | ADMIN            | ALL              | -             | ADMIN         |
-| **Presensi Session** | PENGAJAR         | PENGAJAR/PELAJAR | -             | -             |
-| **Presensi Record**  | PELAJAR/PENGAJAR | PENGAJAR/PELAJAR | PENGAJAR      | -             |
-| **Komponen Nilai**   | PENGAJAR         | ALL              | PENGAJAR      | PENGAJAR      |
-| **Nilai Entry**      | PENGAJAR         | PENGAJAR/PELAJAR | PENGAJAR      | PENGAJAR      |
-| **Materi Section**   | PENGAJAR         | ALL              | PENGAJAR      | PENGAJAR      |
-| **Materi File**      | PENGAJAR         | ALL              | -             | PENGAJAR      |
-| **Announcement**     | ADMIN/PENGAJAR   | ALL              | Creator/ADMIN | Creator/ADMIN |
-| **SPP**              | ADMIN            | ADMIN/PELAJAR    | ADMIN         | ADMIN         |
-| **Gaji**             | ADMIN            | ADMIN/PENGAJAR   | ADMIN         | ADMIN         |
+| Module                  | Create           | Read             | Update        | Delete        |
+| ----------------------- | ---------------- | ---------------- | ------------- | ------------- |
+| **User**                | ADMIN            | ADMIN            | ADMIN         | ADMIN         |
+| **Register (Pelajar)**  | PUBLIC           | -                | -             | -             |
+| **Invite Pengajar**     | ADMIN            | -                | -             | -             |
+| **Register (Pengajar)** | PUBLIC (w/token) | -                | -             | -             |
+| **Semester**            | ADMIN            | ALL              | ADMIN         | ADMIN         |
+| **Mata Pelajaran**      | ADMIN            | ALL              | ADMIN         | ADMIN         |
+| **Kelas**               | ADMIN            | ALL              | ADMIN         | ADMIN         |
+| **Enrollment**          | ADMIN            | ALL              | -             | ADMIN         |
+| **Presensi Session**    | PENGAJAR         | PENGAJAR/PELAJAR | -             | -             |
+| **Presensi Record**     | PELAJAR/PENGAJAR | PENGAJAR/PELAJAR | PENGAJAR      | -             |
+| **Komponen Nilai**      | PENGAJAR         | ALL              | PENGAJAR      | PENGAJAR      |
+| **Nilai Entry**         | PENGAJAR         | PENGAJAR/PELAJAR | PENGAJAR      | PENGAJAR      |
+| **Materi Section**      | PENGAJAR         | ALL              | PENGAJAR      | PENGAJAR      |
+| **Materi File**         | PENGAJAR         | ALL              | -             | PENGAJAR      |
+| **Announcement**        | ADMIN/PENGAJAR   | ALL              | Creator/ADMIN | Creator/ADMIN |
+| **SPP**                 | ADMIN            | ADMIN/PELAJAR    | ADMIN         | ADMIN         |
+| **Gaji**                | ADMIN            | ADMIN/PENGAJAR   | ADMIN         | ADMIN         |
 
 ---
 
@@ -1669,16 +1549,73 @@ export function CreateKelas() {
 
 ## 📊 Complete Workflow Examples
 
-### Scenario 1: Admin Creates Kelas & Enrolls Students
+### Scenario 1: Admin Invites & Teacher Registers
+
+```bash
+# 1. Admin logs in
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@hcq.com","password":"admin123"}'
+
+# 2. Admin creates invitation for new teacher
+curl -X POST http://localhost:3000/api/v1/auth/invite-pengajar \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"newteacher@hcq.com"}'
+
+# Response: { "magicLink": "http://localhost:3000/register?token=abc123..." }
+
+# 3. Teacher receives magic link via email and registers
+curl -X POST "http://localhost:3000/api/v1/auth/register?token=abc123..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "newteacher@hcq.com",
+    "password": "mypassword123",
+    "nama": "Ahmad Rizki",
+    "fullName": "Ahmad Rizki Maulana",
+    "cities": "Jakarta",
+    "address": "Jl. Sudirman No. 123",
+    "phoneNumber": "081234567890"
+  }'
+
+# 4. Teacher can now login
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"newteacher@hcq.com","password":"mypassword123"}'
+```
+
+### Scenario 2: Student Self-Registration
+
+```bash
+# Student registers without admin intervention
+curl -X POST http://localhost:3000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "newstudent@example.com",
+    "password": "student123",
+    "nama": "Fatimah",
+    "fullName": "Fatimah Az-Zahra",
+    "cities": "Bandung",
+    "address": "Jl. Asia Afrika No. 45",
+    "phoneNumber": "082345678901"
+  }'
+
+# Student can immediately login
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"newstudent@example.com","password":"student123"}'
+```
+
+### Scenario 3: Admin Creates Kelas & Enrolls Students
 
 ```bash
 # 1. Login as Admin
-curl -X POST http://localhost:3000/auth/login \
+curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@hcq.com","password":"admin123"}'
 
 # 2. Create Kelas
-curl -X POST http://localhost:3000/kelas \
+curl -X POST http://localhost:3000/api/v1/kelas \
   -H "Authorization: Bearer ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1690,43 +1627,43 @@ curl -X POST http://localhost:3000/kelas \
   }'
 
 # 3. Assign Pengajar
-curl -X POST http://localhost:3000/kelas/KELAS_UUID/assign-pengajar \
+curl -X POST http://localhost:3000/api/v1/kelas/KELAS_UUID/assign-pengajar \
   -H "Authorization: Bearer ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"pengajarId":"PENGAJAR_UUID"}'
 
 # 4. Enroll Pelajar
-curl -X POST http://localhost:3000/kelas/KELAS_UUID/enroll-pelajar \
+curl -X POST http://localhost:3000/api/v1/kelas/KELAS_UUID/enroll-pelajar \
   -H "Authorization: Bearer ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"pelajarId":"PELAJAR_UUID"}'
 ```
 
-### Scenario 2: Pengajar Manages Presensi
+### Scenario 4: Pengajar Manages Presensi
 
 ```bash
 # 1. Start Kelas & Generate Code
-curl -X POST http://localhost:3000/presensi/kelas/KELAS_UUID/mulai \
+curl -X POST http://localhost:3000/api/v1/presensi/kelas/KELAS_UUID/mulai \
   -H "Authorization: Bearer PENGAJAR_TOKEN"
 
 # Response: { "kode": "ABC123", "expiresAt": "..." }
 
 # 2. Pelajar Submits Presensi
-curl -X POST http://localhost:3000/presensi/hadir \
+curl -X POST http://localhost:3000/api/v1/presensi/hadir \
   -H "Authorization: Bearer PELAJAR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"kodePresensi":"ABC123"}'
 
 # 3. Pengajar Views Presensi
-curl http://localhost:3000/presensi/session/SESSION_UUID \
+curl http://localhost:3000/api/v1/presensi/session/SESSION_UUID \
   -H "Authorization: Bearer PENGAJAR_TOKEN"
 ```
 
-### Scenario 3: Pengajar Uploads Materi
+### Scenario 5: Pengajar Uploads Materi
 
 ```bash
 # 1. Create Section
-curl -X POST http://localhost:3000/materi/section \
+curl -X POST http://localhost:3000/api/v1/materi/section \
   -H "Authorization: Bearer PENGAJAR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1736,38 +1673,38 @@ curl -X POST http://localhost:3000/materi/section \
   }'
 
 # 2. Upload File
-curl -X POST http://localhost:3000/materi/file \
+curl -X POST http://localhost:3000/api/v1/materi/file \
   -H "Authorization: Bearer PENGAJAR_TOKEN" \
   -F "materiSectionId=SECTION_UUID" \
   -F "file=@makhorijul-huruf.pdf"
 
 # 3. Pelajar Views Materi
-curl http://localhost:3000/materi/section/kelas/KELAS_UUID \
+curl http://localhost:3000/api/v1/materi/section/kelas/KELAS_UUID \
   -H "Authorization: Bearer PELAJAR_TOKEN"
 
 # 4. Pelajar Downloads File
-curl http://localhost:3000/materi/file/download/FILE_UUID \
+curl http://localhost:3000/api/v1/materi/file/download/FILE_UUID \
   -H "Authorization: Bearer PELAJAR_TOKEN" \
   -o downloaded.pdf
 ```
 
-### Scenario 4: Pengajar Manages Nilai
+### Scenario 6: Pengajar Manages Nilai
 
 ```bash
 # 1. Create Komponen
-curl -X POST http://localhost:3000/nilai/komponen \
+curl -X POST http://localhost:3000/api/v1/nilai/komponen \
   -H "Authorization: Bearer PENGAJAR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"kelasId":"KELAS_UUID","nama":"UTS","bobot":30}'
 
 # 2. Entry Nilai
-curl -X POST http://localhost:3000/nilai/entry \
+curl -X POST http://localhost:3000/api/v1/nilai/entry \
   -H "Authorization: Bearer PENGAJAR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"komponenId":"KOMPONEN_UUID","pelajarId":"PELAJAR_UUID","nilai":85}'
 
 # 3. Pelajar Views Nilai
-curl http://localhost:3000/nilai/saya \
+curl http://localhost:3000/api/v1/nilai/saya \
   -H "Authorization: Bearer PELAJAR_TOKEN"
 ```
 

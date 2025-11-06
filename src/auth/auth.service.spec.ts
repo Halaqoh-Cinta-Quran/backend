@@ -5,7 +5,6 @@ import { JwtService } from '@nestjs/jwt';
 import {
   ConflictException,
   UnauthorizedException,
-  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
@@ -19,6 +18,13 @@ describe('AuthService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+    },
+    pengajarInvitation: {
+      findUnique: jest.fn(),
+      delete: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      upsert: jest.fn(),
     },
   };
 
@@ -49,12 +55,13 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('should successfully register ADMIN user', async () => {
+    it('should successfully register ADMIN user (deprecated - now uses invitation system)', async () => {
+      // This test is kept for backward compatibility
+      // In practice, ADMIN users should be created through seed or direct DB operations
       const registerDto = {
         email: 'admin@example.com',
         password: 'password123',
         nama: 'Admin User',
-        role: Role.ADMIN,
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue(null);
@@ -62,52 +69,77 @@ describe('AuthService', () => {
         id: '1',
         email: registerDto.email,
         nama: registerDto.nama,
-        role: registerDto.role,
+        role: Role.PELAJAR,
         createdAt: new Date(),
       });
 
-      const result = await service.register(registerDto);
+      const result = await service.registerPelajar(registerDto);
 
-      expect(result).toHaveProperty('message', 'User registered successfully');
+      expect(result).toHaveProperty(
+        'message',
+        'Student registered successfully',
+      );
       expect(result).toHaveProperty('user');
       expect(result.user.email).toBe(registerDto.email);
-      expect(result.user.role).toBe(Role.ADMIN);
+      expect(result.user.role).toBe(Role.PELAJAR);
     });
 
-    it('should successfully register PENGAJAR user', async () => {
+    it('should successfully register PENGAJAR user with valid token', async () => {
+      const token = 'valid-token-123';
       const registerDto = {
         email: 'pengajar@example.com',
         password: 'password123',
         nama: 'Pengajar User',
-        role: Role.PENGAJAR,
       };
 
+      const mockInvitation = {
+        id: 'inv-1',
+        email: registerDto.email,
+        token,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+        used: false,
+        createdAt: new Date(),
+      };
+
+      mockPrismaService.pengajarInvitation.findUnique.mockResolvedValue(
+        mockInvitation,
+      );
       mockPrismaService.user.findUnique.mockResolvedValue(null);
       mockPrismaService.user.create.mockResolvedValue({
         id: '1',
         email: registerDto.email,
         nama: registerDto.nama,
-        role: registerDto.role,
+        role: Role.PENGAJAR,
         createdAt: new Date(),
       });
+      mockPrismaService.pengajarInvitation.update.mockResolvedValue(
+        mockInvitation,
+      );
 
-      const result = await service.register(registerDto);
+      const result = await service.registerPengajarWithToken(
+        registerDto,
+        token,
+      );
 
-      expect(result).toHaveProperty('message', 'User registered successfully');
+      expect(result).toHaveProperty(
+        'message',
+        'Teacher registered successfully',
+      );
       expect(result.user.role).toBe(Role.PENGAJAR);
     });
 
-    it('should throw ForbiddenException when trying to register PELAJAR', async () => {
+    it('should throw BadRequestException when token is invalid', async () => {
       const registerDto = {
         email: 'pelajar@example.com',
         password: 'password123',
         nama: 'Pelajar User',
-        role: Role.PELAJAR,
       };
 
-      await expect(service.register(registerDto)).rejects.toThrow(
-        ForbiddenException,
-      );
+      mockPrismaService.pengajarInvitation.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.registerPengajarWithToken(registerDto, 'invalid-token'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw ConflictException if email already exists', async () => {
@@ -115,7 +147,6 @@ describe('AuthService', () => {
         email: 'existing@example.com',
         password: 'password123',
         nama: 'Test User',
-        role: Role.ADMIN,
       };
 
       mockPrismaService.user.findUnique.mockResolvedValue({
@@ -123,7 +154,7 @@ describe('AuthService', () => {
         email: registerDto.email,
       });
 
-      await expect(service.register(registerDto)).rejects.toThrow(
+      await expect(service.registerPelajar(registerDto)).rejects.toThrow(
         ConflictException,
       );
     });
