@@ -829,7 +829,66 @@ Authorization: Bearer <pengajar-token>
 
 - Generates unique 6-digit code
 - Code expires after 3 hours
-- Only one active session per kelas
+- Automatically creates presensi records for all enrolled pelajar with status ALFA
+- Pelajar who submit the code will have their status updated from ALFA to HADIR
+
+#### Stop Presensi Session (Pengajar)
+
+```http
+POST /presensi/session/:sessionId/stop
+Authorization: Bearer <pengajar-token>
+```
+
+**Description:** Manually stop/close a presensi session before the automatic expiry time.
+
+**Response:**
+
+```json
+{
+  "message": "Presensi session stopped successfully",
+  "session": {
+    "id": "uuid",
+    "kode": "ABC123",
+    "expiresAt": "2025-12-02T12:00:00.000Z",
+    "kelas": {
+      "namaKelas": "Tahsin - Kelas Pagi"
+    },
+    "presensiRecords": [
+      {
+        "id": "uuid",
+        "status": "HADIR",
+        "user": {
+          "nama": "Muhammad Ali"
+        }
+      },
+      {
+        "id": "uuid",
+        "status": "ALFA",
+        "user": {
+          "nama": "Fatimah Zahra"
+        }
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+
+- Sets `expiresAt` to current time, immediately expiring the session
+- Useful when class ends early or pengajar wants to close presensi manually
+- Only the pengajar assigned to the kelas can stop the session
+- Students can no longer submit presensi after session is stopped
+
+**Error Responses:**
+
+```json
+// Session not found
+{ "statusCode": 404, "message": "Presensi session not found" }
+
+// Not authorized
+{ "statusCode": 403, "message": "You are not assigned as pengajar for this kelas" }
+```
 
 #### Pelajar Hadir dengan Kode
 
@@ -842,6 +901,8 @@ Content-Type: application/json
   "kodePresensi": "ABC123"
 }
 ```
+
+**Description:** Updates pelajar's presensi status from ALFA to HADIR when they submit the attendance code.
 
 **Response:**
 
@@ -963,6 +1024,108 @@ Authorization: Bearer <pelajar-token>
     }
   }
 ]
+```
+
+#### Get All Presensi Sessions by Kelas (Pengajar/Admin)
+
+```http
+GET /presensi/kelas/:kelasId
+Authorization: Bearer <token>
+```
+
+**Description:** Get all presensi sessions and records for a specific kelas.
+
+**Response:**
+
+```json
+{
+  "kelas": {
+    "id": "uuid",
+    "namaKelas": "Tahsin - Kelas Pagi",
+    "jadwalHari": "Senin, Rabu, Jumat",
+    "jadwalJam": "08:00 - 09:30",
+    "semester": {
+      "id": "uuid",
+      "nama": "Ganjil 2025/2026",
+      "status": "AKTIF"
+    },
+    "mataPelajaran": {
+      "id": "uuid",
+      "nama": "Tahsin",
+      "kode": "THS"
+    }
+  },
+  "sessions": [
+    {
+      "id": "uuid",
+      "kode": "ABC123",
+      "tanggal": "2025-11-06T10:00:00.000Z",
+      "expiresAt": "2025-11-06T13:00:00.000Z",
+      "presensiRecords": [
+        {
+          "id": "uuid",
+          "status": "HADIR",
+          "timestamp": "2025-11-06T10:05:00.000Z",
+          "isManual": false,
+          "user": {
+            "id": "uuid",
+            "nama": "Muhammad Ali",
+            "email": "ali@hcq.com",
+            "role": "PELAJAR"
+          }
+        },
+        {
+          "id": "uuid",
+          "status": "SAKIT",
+          "timestamp": "2025-11-06T10:10:00.000Z",
+          "isManual": true,
+          "user": {
+            "id": "uuid",
+            "nama": "Fatimah Zahra",
+            "email": "fatimah@hcq.com",
+            "role": "PELAJAR"
+          }
+        }
+      ]
+    },
+    {
+      "id": "uuid",
+      "kode": "XYZ789",
+      "tanggal": "2025-11-04T10:00:00.000Z",
+      "expiresAt": "2025-11-04T13:00:00.000Z",
+      "presensiRecords": [
+        {
+          "id": "uuid",
+          "status": "HADIR",
+          "timestamp": "2025-11-04T10:03:00.000Z",
+          "isManual": false,
+          "user": {
+            "id": "uuid",
+            "nama": "Muhammad Ali",
+            "email": "ali@hcq.com",
+            "role": "PELAJAR"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Notes:**
+
+- Returns all presensi sessions for a specific kelas
+- Sessions are ordered by date (newest first)
+- Each session includes all presensi records
+- Useful for generating attendance reports and statistics
+
+**Error Response:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Kelas with ID ... not found"
+}
 ```
 
 ---
@@ -1347,46 +1510,88 @@ Content-Type: application/json
 #### Get All Announcements (Filtered by Role & Enrollment)
 
 ```http
-GET /announcement
+GET /announcement?page=1&limit=10&search=libur
 Authorization: Bearer <token>
 ```
+
+**Query Parameters:**
+
+- `page` (optional): Page number, default = 1
+- `limit` (optional): Items per page, default = 10, max = 100
+- `search` (optional): Search keyword to filter by title (judul) or content (isi), case-insensitive
 
 **Filtering Rules:**
 
 - **ADMIN:** See all announcements
 - **PENGAJAR:** See GLOBAL + KELAS where assigned
 - **PELAJAR:** See GLOBAL + KELAS where enrolled
+- **Search:** Filters announcements containing the search keyword in title or content
 
 **Response:**
 
 ```json
-[
-  {
-    "id": "uuid",
-    "judul": "Libur Semester",
-    "isi": "Semester akan libur mulai tanggal 20 Desember",
-    "scope": "GLOBAL",
-    "creator": {
-      "nama": "Admin HCQ",
-      "role": "ADMIN"
+{
+  "data": [
+    {
+      "id": "uuid",
+      "judul": "Libur Semester",
+      "isi": "Semester akan libur mulai tanggal 20 Desember",
+      "scope": "GLOBAL",
+      "creator": {
+        "nama": "Admin HCQ",
+        "role": "ADMIN"
+      },
+      "createdAt": "2025-11-06T10:00:00.000Z"
     },
-    "createdAt": "2025-11-06T10:00:00.000Z"
-  },
-  {
-    "id": "uuid",
-    "judul": "Tugas Hafalan",
-    "isi": "Harap menghafalkan Surah Al-Mulk",
-    "scope": "KELAS",
-    "kelas": {
-      "namaKelas": "Tahsin - Kelas Pagi"
-    },
-    "creator": {
-      "nama": "Ustadz Ahmad",
-      "role": "PENGAJAR"
-    },
-    "createdAt": "2025-11-06T09:00:00.000Z"
+    {
+      "id": "uuid",
+      "judul": "Tugas Hafalan",
+      "isi": "Harap menghafalkan Surah Al-Mulk",
+      "scope": "KELAS",
+      "kelas": {
+        "namaKelas": "Tahsin - Kelas Pagi"
+      },
+      "creator": {
+        "nama": "Ustadz Ahmad",
+        "role": "PENGAJAR"
+      },
+      "createdAt": "2025-11-06T09:00:00.000Z"
+    }
+  ],
+  "meta": {
+    "total": 25,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 3,
+    "hasNextPage": true,
+    "hasPreviousPage": false
   }
-]
+}
+```
+
+**Pagination Examples:**
+
+```bash
+# Get first page (10 items)
+GET /announcement
+
+# Get second page (10 items)
+GET /announcement?page=2
+
+# Get first page with 20 items
+GET /announcement?page=1&limit=20
+
+# Get third page with 5 items
+GET /announcement?page=3&limit=5
+
+# Search for announcements containing "libur"
+GET /announcement?search=libur
+
+# Search with pagination
+GET /announcement?page=1&limit=10&search=tugas
+
+# Search is case-insensitive
+GET /announcement?search=LIBUR  # Same as search=libur
 ```
 
 #### Update Announcement
@@ -1586,25 +1791,25 @@ Authorization: Bearer <admin-token>
 
 ## Authorization Matrix
 
-| Module                  | Create           | Read             | Update        | Delete        |
-| ----------------------- | ---------------- | ---------------- | ------------- | ------------- |
-| **User**                | ADMIN            | ADMIN            | ADMIN         | ADMIN         |
-| **Register (Pelajar)**  | PUBLIC           | -                | -             | -             |
-| **Invite Pengajar**     | ADMIN            | -                | -             | -             |
-| **Register (Pengajar)** | PUBLIC (w/token) | -                | -             | -             |
-| **Semester**            | ADMIN            | ALL              | ADMIN         | ADMIN         |
-| **Mata Pelajaran**      | ADMIN            | ALL              | ADMIN         | ADMIN         |
-| **Kelas**               | ADMIN            | ALL              | ADMIN         | ADMIN         |
-| **Enrollment**          | ADMIN            | ALL              | -             | ADMIN         |
-| **Presensi Session**    | PENGAJAR         | PENGAJAR/PELAJAR | -             | -             |
-| **Presensi Record**     | PELAJAR/PENGAJAR | PENGAJAR/PELAJAR | PENGAJAR      | -             |
-| **Komponen Nilai**      | PENGAJAR         | ALL              | PENGAJAR      | PENGAJAR      |
-| **Nilai Entry**         | PENGAJAR         | PENGAJAR/PELAJAR | PENGAJAR      | PENGAJAR      |
-| **Materi Section**      | PENGAJAR         | ALL              | PENGAJAR      | PENGAJAR      |
-| **Materi File**         | PENGAJAR         | ALL              | -             | PENGAJAR      |
-| **Announcement**        | ADMIN/PENGAJAR   | ALL              | Creator/ADMIN | Creator/ADMIN |
-| **SPP**                 | ADMIN            | ADMIN/PELAJAR    | ADMIN         | ADMIN         |
-| **Gaji**                | ADMIN            | ADMIN/PENGAJAR   | ADMIN         | ADMIN         |
+| Module                  | Create           | Read             | Update           | Delete        |
+| ----------------------- | ---------------- | ---------------- | ---------------- | ------------- |
+| **User**                | ADMIN            | ADMIN            | ADMIN            | ADMIN         |
+| **Register (Pelajar)**  | PUBLIC           | -                | -                | -             |
+| **Invite Pengajar**     | ADMIN            | -                | -                | -             |
+| **Register (Pengajar)** | PUBLIC (w/token) | -                | -                | -             |
+| **Semester**            | ADMIN            | ALL              | ADMIN            | ADMIN         |
+| **Mata Pelajaran**      | ADMIN            | ALL              | ADMIN            | ADMIN         |
+| **Kelas**               | ADMIN            | ALL              | ADMIN            | ADMIN         |
+| **Enrollment**          | ADMIN            | ALL              | -                | ADMIN         |
+| **Presensi Session**    | PENGAJAR         | PENGAJAR/PELAJAR | PENGAJAR (stop)  | -             |
+| **Presensi Record**     | AUTO (ALFA)      | PENGAJAR/PELAJAR | PELAJAR/PENGAJAR | -             |
+| **Komponen Nilai**      | PENGAJAR         | ALL              | PENGAJAR         | PENGAJAR      |
+| **Nilai Entry**         | PENGAJAR         | PENGAJAR/PELAJAR | PENGAJAR         | PENGAJAR      |
+| **Materi Section**      | PENGAJAR         | ALL              | PENGAJAR         | PENGAJAR      |
+| **Materi File**         | PENGAJAR         | ALL              | -                | PENGAJAR      |
+| **Announcement**        | ADMIN/PENGAJAR   | ALL              | Creator/ADMIN    | Creator/ADMIN |
+| **SPP**                 | ADMIN            | ADMIN/PELAJAR    | ADMIN            | ADMIN         |
+| **Gaji**                | ADMIN            | ADMIN/PENGAJAR   | ADMIN            | ADMIN         |
 
 ---
 

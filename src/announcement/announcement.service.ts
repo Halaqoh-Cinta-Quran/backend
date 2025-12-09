@@ -89,7 +89,18 @@ export class AnnouncementService {
     });
   }
 
-  async findAll(userId: string) {
+  async findAll(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ) {
+    // Validate pagination parameters
+    if (page < 1) page = 1;
+    if (limit < 1 || limit > 100) limit = 10;
+
+    const skip = (page - 1) * limit;
+
     // Get user with enrollments
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -102,11 +113,48 @@ export class AnnouncementService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // Get all GLOBAL announcements
-    const globalAnnouncements = await this.prisma.announcement.findMany({
-      where: {
-        scope: AnnouncementScope.GLOBAL,
-      },
+    // Get kelas IDs where user is enrolled
+    const kelasIds = user.enrollments.map((e) => e.kelasId);
+
+    // Build where condition based on user role and enrollments
+    const whereCondition =
+      kelasIds.length > 0
+        ? {
+            OR: [
+              { scope: AnnouncementScope.GLOBAL },
+              {
+                scope: AnnouncementScope.KELAS,
+                kelasId: { in: kelasIds },
+              },
+            ],
+          }
+        : {
+            scope: AnnouncementScope.GLOBAL,
+          };
+
+    // Add search condition if provided
+    const finalWhereCondition = search
+      ? {
+          AND: [
+            whereCondition,
+            {
+              OR: [
+                { judul: { contains: search, mode: 'insensitive' as const } },
+                { isi: { contains: search, mode: 'insensitive' as const } },
+              ],
+            },
+          ],
+        }
+      : whereCondition;
+
+    // Get total count for pagination metadata
+    const total = await this.prisma.announcement.count({
+      where: finalWhereCondition,
+    });
+
+    // Get paginated announcements
+    const announcements = await this.prisma.announcement.findMany({
+      where: finalWhereCondition,
       include: {
         creator: {
           select: {
@@ -116,54 +164,33 @@ export class AnnouncementService {
             role: true,
           },
         },
+        kelas: {
+          include: {
+            semester: true,
+            mataPelajaran: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
       },
+      skip,
+      take: limit,
     });
 
-    // Get kelas IDs where user is enrolled
-    const kelasIds = user.enrollments.map((e) => e.kelasId);
+    const totalPages = Math.ceil(total / limit);
 
-    // Get announcements for kelas where user is enrolled
-    const kelasAnnouncements =
-      kelasIds.length > 0
-        ? await this.prisma.announcement.findMany({
-            where: {
-              scope: AnnouncementScope.KELAS,
-              kelasId: {
-                in: kelasIds,
-              },
-            },
-            include: {
-              creator: {
-                select: {
-                  id: true,
-                  nama: true,
-                  email: true,
-                  role: true,
-                },
-              },
-              kelas: {
-                include: {
-                  semester: true,
-                  mataPelajaran: true,
-                },
-              },
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-          })
-        : [];
-
-    // Combine and sort by createdAt
-    const allAnnouncements = [...globalAnnouncements, ...kelasAnnouncements];
-    allAnnouncements.sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-    );
-
-    return allAnnouncements;
+    return {
+      data: announcements,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   async findOne(id: string) {

@@ -66,17 +66,48 @@ export class PresensiService {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 3);
 
+    // Get all pelajar enrolled in this kelas
+    const pelajarEnrollments = await this.prisma.enrollment.findMany({
+      where: {
+        kelasId,
+        user: {
+          role: Role.PELAJAR,
+        },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
     const session = await this.prisma.presensiSession.create({
       data: {
         kelasId,
         kode,
         expiresAt,
+        presensiRecords: {
+          create: pelajarEnrollments.map((enrollment) => ({
+            userId: enrollment.userId,
+            status: StatusPresensi.ALFA,
+            isManual: false,
+          })),
+        },
       },
       include: {
         kelas: {
           include: {
             semester: true,
             mataPelajaran: true,
+          },
+        },
+        presensiRecords: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                nama: true,
+                email: true,
+              },
+            },
           },
         },
       },
@@ -123,27 +154,17 @@ export class PresensiService {
       throw new ForbiddenException('Anda tidak terdaftar di kelas ini');
     }
 
-    // Check if already recorded
-    const existing = await this.prisma.presensiRecord.findUnique({
+    // Update presensi record from ALFA to HADIR
+    const record = await this.prisma.presensiRecord.update({
       where: {
         presensiSessionId_userId: {
           presensiSessionId: session.id,
           userId,
         },
       },
-    });
-
-    if (existing) {
-      throw new BadRequestException('Anda sudah melakukan presensi');
-    }
-
-    // Create presensi record
-    const record = await this.prisma.presensiRecord.create({
       data: {
-        presensiSessionId: session.id,
-        userId,
         status: StatusPresensi.HADIR,
-        isManual: false,
+        updatedAt: new Date(),
       },
       include: {
         user: {
@@ -304,5 +325,118 @@ export class PresensiService {
     });
 
     return records;
+  }
+
+  async getPresensiByKelas(kelasId: string) {
+    // Validate kelas exists
+    const kelas = await this.prisma.kelas.findUnique({
+      where: { id: kelasId },
+      include: {
+        semester: true,
+        mataPelajaran: true,
+      },
+    });
+
+    if (!kelas) {
+      throw new NotFoundException(`Kelas with ID ${kelasId} not found`);
+    }
+
+    // Get all presensi sessions for this kelas
+    const sessions = await this.prisma.presensiSession.findMany({
+      where: { kelasId },
+      include: {
+        presensiRecords: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                nama: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return {
+      kelas,
+      sessions,
+    };
+  }
+
+  async stopSession(sessionId: string, pengajarId: string) {
+    // Find session
+    const session = await this.prisma.presensiSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        kelas: {
+          include: {
+            enrollments: {
+              where: {
+                userId: pengajarId,
+              },
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Presensi session not found');
+    }
+
+    // Validate pengajar is assigned to this kelas
+    const enrollment = session.kelas.enrollments.find(
+      (e) => e.userId === pengajarId && e.user.role === Role.PENGAJAR,
+    );
+
+    if (!enrollment) {
+      throw new ForbiddenException(
+        'You are not assigned as pengajar for this kelas',
+      );
+    }
+
+    // Set expiresAt to now to immediately expire the session
+    const updatedSession = await this.prisma.presensiSession.update({
+      where: { id: sessionId },
+      data: {
+        expiresAt: new Date(),
+      },
+      include: {
+        kelas: {
+          include: {
+            semester: true,
+            mataPelajaran: true,
+          },
+        },
+        presensiRecords: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                nama: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      message: 'Presensi session stopped successfully',
+      session: updatedSession,
+    };
   }
 }

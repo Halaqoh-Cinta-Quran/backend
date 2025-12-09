@@ -57,4 +57,16 @@ export class PresensiController {
   getRiwayatPresensi(@Req() req: Request) {
     return this.presensiService.getRiwayatPresensi(req.user!.sub);
   }
+
+  @Get('kelas/:id')
+  @Roles(Role.PENGAJAR, Role.ADMIN)
+  getPresensiByKelas(@Param('id') id: string) {
+    return this.presensiService.getPresensiByKelas(id);
+  }
+
+  @Post('session/:id/stop')
+  @Roles(Role.PENGAJAR)
+  stopSession(@Param('id') id: string, @Req() req: Request) {
+    return this.presensiService.stopSession(id, req.user!.sub);
+  }
 }

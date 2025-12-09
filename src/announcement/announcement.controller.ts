@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Req,
+  Query,
 } from '@nestjs/common';
 import { AnnouncementService } from './announcement.service';
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './dto';
@@ -35,8 +36,20 @@ export class AnnouncementController {
   }
 
   @Get()
-  findAll(@Req() req: Request) {
-    return this.announcementService.findAll(req.user!.sub);
+  findAll(
+    @Req() req: Request,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.announcementService.findAll(
+      req.user!.sub,
+      pageNum,
+      limitNum,
+      search,
+    );
   }
 
   @Get(':id')

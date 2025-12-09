@@ -46,13 +46,13 @@ describe('Auth Module (e2e)', () => {
           email: 'test@example.com',
           password: 'password123',
           nama: 'Test User',
-          role: 'PELAJAR',
         })
         .expect(201)
         .expect((res) => {
           expect(res.body).toHaveProperty('message');
           expect(res.body).toHaveProperty('user');
           expect(res.body.user).toHaveProperty('email', 'test@example.com');
+          expect(res.body.user).toHaveProperty('role', 'PELAJAR');
           expect(res.body.user).not.toHaveProperty('password');
         });
     });
@@ -64,7 +64,6 @@ describe('Auth Module (e2e)', () => {
           email: 'invalid-email',
           password: 'password123',
           nama: 'Test User',
-          role: 'PELAJAR',
         })
         .expect(400);
     });
@@ -76,7 +75,6 @@ describe('Auth Module (e2e)', () => {
           email: 'test@example.com',
           password: 'password123',
           nama: 'Test User',
-          role: 'PELAJAR',
         })
         .expect(409);
     });
@@ -88,7 +86,6 @@ describe('Auth Module (e2e)', () => {
           email: 'test2@example.com',
           password: '123',
           nama: 'Test User',
-          role: 'PELAJAR',
         })
         .expect(400);
     });
@@ -104,9 +101,10 @@ describe('Auth Module (e2e)', () => {
         })
         .expect(200)
         .expect((res) => {
-          expect(res.body).toHaveProperty('access_token');
+          expect(res.body).toHaveProperty('accessToken');
           expect(res.body).toHaveProperty('user');
           expect(res.body.user).toHaveProperty('email', 'test@example.com');
+          expect(res.headers['set-cookie']).toBeDefined();
         });
     });
 
@@ -141,7 +139,7 @@ describe('Auth Module (e2e)', () => {
           email: 'test@example.com',
           password: 'password123',
         });
-      accessToken = response.body.access_token;
+      accessToken = response.body.accessToken;
     });
 
     it('should get current user with valid token', () => {
